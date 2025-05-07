@@ -301,7 +301,7 @@ class Interface {
             Autopilot.stop();
             this.coordsLive = true;
 
-            const angle = -e.deltaY * settings.rotateModifierSpeed;
+            const angle = e.deltaY * settings.rotateModifierSpeed;
             const zc = Graph.vecToZ().minus(Graph.pan);
             const deltaRotation = Graph.applyRotationDelta(angle);
 

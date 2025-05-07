@@ -301,7 +301,7 @@ class Interface {
             Autopilot.stop();
             this.coordsLive = true;
 
-            const angle = -e.deltaY * settings.rotateModifierSpeed;
+            const angle = e.deltaY * settings.rotateModifierSpeed;
             const zc = Graph.vecToZ().minus(Graph.pan);
             const deltaRotation = Graph.applyRotationDelta(angle);
 
@@ -318,7 +318,7 @@ class Interface {
             App.menuContext.hide();
             this.coordsLive = true;
             const dest = Graph.vecToZ();
-            regenAmount += Math.abs(e.deltaY);
+            regenAmount += Math.abs(-e.deltaY);
             const amount = Math.exp(-e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier);
             performZoom(amount, dest);
             e.stopPropagation();

@@ -9,7 +9,7 @@ export default defineConfig({
         minify: false
     },
     server: {
-        allowedHosts: 'hal.yeet.fm',
+        allowedHosts: ['hal.yeet.fm'],
         port: 8080
     },
     worker: {

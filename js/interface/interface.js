@@ -301,7 +301,7 @@ class Interface {
             Autopilot.stop();
             this.coordsLive = true;
 
-            const angle = e.deltaY * settings.rotateModifierSpeed;
+            const angle = -e.deltaY * settings.rotateModifierSpeed;
             const zc = Graph.vecToZ().minus(Graph.pan);
             const deltaRotation = Graph.applyRotationDelta(angle);
 
@@ -319,7 +319,7 @@ class Interface {
             this.coordsLive = true;
             const dest = Graph.vecToZ();
             regenAmount += Math.abs(e.deltaY);
-            const amount = Math.exp(e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier);
+            const amount = Math.exp(-e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier);
             performZoom(amount, dest);
             e.stopPropagation();
         } else if (settings.panClick === "scroll") {
@@ -327,7 +327,7 @@ class Interface {
             Autopilot.stop();
             this.coordsLive = true;
             let dest = Graph.vecToZ();
-            const dp = toDZ(new vec2(e.deltaX, e.deltaY).scale(settings.panSpeed));
+            const dp = toDZ(new vec2(e.deltaX, -e.deltaY).scale(settings.panSpeed));
             regenAmount += Math.hypot(e.deltaX, e.deltaY);
             Graph.pan_incBy(dp);
             e.stopPropagation();

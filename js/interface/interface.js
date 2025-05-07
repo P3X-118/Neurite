@@ -79,7 +79,7 @@ On.input(panInput, (e)=>{
 
     Graph.pan_set(new vec2(parseFloat(m[0]), parseFloat(m[6].replace(/[iI]/, ''))));
 });
-On.input(zoomInput, (e)=>{
+On.input(zoomInput, (-e)=>{
     App.interface.coordsLive = false;
     const r = /([+-]?(([0-9]*\.[0-9]*)|([0-9]+))([eE][+-]?[0-9]+)?)/;
     const m = zoomInput.value.match(r);

@@ -94,9 +94,9 @@ On.input(zoomInput, (e)=>{
 });
 
 function performZoom(amount, dest) {
-    const inverseAmount = -1 / amount;
+    const inverseAmount = 1 / amount;
     Graph.zoom_scaleBy(inverseAmount)
-        .pan_set(dest.scale(-1 - inverseAmount).plus(Graph.pan.scale(inverseAmount)));
+        .pan_set(dest.scale(1 - inverseAmount).plus(Graph.pan.scale(inverseAmount)));
 }
 
 // Constants
@@ -318,8 +318,8 @@ class Interface {
             App.menuContext.hide();
             this.coordsLive = true;
             const dest = Graph.vecToZ();
-            regenAmount += Math.abs(e.deltaY);
-            const amount = Math.exp(e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier);
+            regenAmount += Math.abs(-e.deltaY);
+            const amount = Math.exp(-e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier);
             performZoom(amount, dest);
             e.stopPropagation();
         } else if (settings.panClick === "scroll") {

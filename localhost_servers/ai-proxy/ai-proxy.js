@@ -16,6 +16,25 @@ let ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/api/'
 // LocalAI Base URL — when set, overrides the Ollama routes with LocalAI's OpenAI-compatible API
 const localaiBaseUrl = process.env.LOCALAI_BASE_URL || null;
 
+// LocalAI ("dex") enforces a bearer token — clients must send
+// `Authorization: Bearer <LOCALAI_API_KEY>`. Without it every /models and
+// /chat/completions call 401s. (Env was plumbed in but never read before.)
+const localaiApiKey = process.env.LOCALAI_API_KEY || null;
+
+// --- Single-flight queue for LocalAI (hal Jetson serves ONE model at a time) --
+// Concurrent inference calls thrash the model backend (unload/reload -> timeouts,
+// grpc-not-ready 500s). This box is the shared gateway, so serialization MUST
+// live here (a global property of the single GPU), not per-caller. Only calls
+// that hit LocalAI are serialized; external clouds (OpenAI/Anthropic/Groq) and
+// quick metadata calls (tags) are not.
+let localaiChain = Promise.resolve();
+function runSerialized(task) {
+    const run = localaiChain.then(task, task);
+    // Keep the chain alive regardless of task outcome.
+    localaiChain = run.then(() => {}, () => {});
+    return run;
+}
+
 // Endpoint to receive API keys from the client-side JavaScript
 app.post('/api-keys', (req, res) => {
     const { openaiApiKey: clientOpenaiApiKey, groqApiKey: clientGroqApiKey, anthropicApiKey: clientAnthropicApiKey, ollamaBaseUrl: clientOllamaBaseUrl } = req.body;
@@ -30,17 +49,46 @@ app.post('/api-keys', (req, res) => {
 
 function modifyRequestByApiType(apiType, headers, apiKey) {
     headers['Content-Type'] = 'application/json';
-    headers['Authorization'] = `Bearer ${apiKey}`;
+    // Only send auth when we actually have a key — avoids "Bearer null" (Ollama
+    // ignored it, but it's wrong and some backends reject it).
+    if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+    }
 
     if (apiType === 'anthropic') {
         headers['OpenAI-Version'] = '2020-10-01';
     }
 }
 
+// Rewrite one SSE line so reasoning-distill models (qwen3.5-9b-glm5.1-distill,
+// gemma) render: they stream the answer in `delta.reasoning` with empty
+// `delta.content`, and the Neurite client only reads content. Mirror the
+// non-stream backfill onto the streaming path.
+function transformSseLine(line) {
+    if (!line.startsWith('data:')) return line; // comments/blank lines pass through
+    const payload = line.slice(5).trim();
+    if (payload === '' || payload === '[DONE]') return line;
+    try {
+        const obj = JSON.parse(payload);
+        if (Array.isArray(obj.choices)) {
+            obj.choices.forEach(c => {
+                if (c.delta &&
+                    (c.delta.content == null || c.delta.content === '') &&
+                    c.delta.reasoning) {
+                    c.delta.content = c.delta.reasoning;
+                }
+            });
+        }
+        return 'data: ' + JSON.stringify(obj);
+    } catch (_) {
+        return line; // not JSON we understand — pass through untouched
+    }
+}
+
 
 const activeRequests = new Map();
 
-function modifyResponseByApiType(apiType, response, res, stream, requestId) {
+function modifyResponseByApiType(apiType, response, res, stream, requestId, streamReasoning = false) {
     return new Promise((resolve, reject) => {
         const cleanup = () => {
             if (requestId) {
@@ -48,7 +96,33 @@ function modifyResponseByApiType(apiType, response, res, stream, requestId) {
             }
         };
 
-        if (stream) {
+        if (stream && streamReasoning) {
+            // Intercept SSE line-by-line to backfill reasoning -> content. Buffer
+            // partial lines across chunk boundaries.
+            if (!res.headersSent) {
+                res.setHeader('Content-Type', response.headers['content-type'] || 'text/event-stream');
+            }
+            let buffer = '';
+            response.data.on('data', (chunk) => {
+                buffer += chunk.toString('utf8');
+                let nl;
+                while ((nl = buffer.indexOf('\n')) >= 0) {
+                    const line = buffer.slice(0, nl);
+                    buffer = buffer.slice(nl + 1);
+                    res.write(transformSseLine(line) + '\n');
+                }
+            });
+            response.data.on('end', () => {
+                if (buffer) res.write(transformSseLine(buffer));
+                res.end();
+                cleanup();
+                resolve();
+            });
+            response.data.on('error', (error) => {
+                cleanup();
+                reject(error);
+            });
+        } else if (stream) {
             response.data.pipe(res);
             response.data.on('end', () => {
                 cleanup();
@@ -79,7 +153,7 @@ function modifyResponseByApiType(apiType, response, res, stream, requestId) {
     });
 }
 
-async function handleApiRequest(req, res, apiEndpoint, apiKey, apiType, additionalOptions = {}) {
+async function handleApiRequest(req, res, apiEndpoint, apiKey, apiType, additionalOptions = {}, proxyOpts = {}) {
     const { model, messages, max_tokens, temperature, stream, requestId } = req.body;
     const requestBody = {
         model,
@@ -105,7 +179,7 @@ async function handleApiRequest(req, res, apiEndpoint, apiKey, apiType, addition
             cancelToken: cancelToken.token
         });
 
-        await modifyResponseByApiType(apiType, response, res, stream, requestId);
+        await modifyResponseByApiType(apiType, response, res, stream, requestId, proxyOpts.streamReasoning);
     } catch (error) {
         if (axios.isCancel(error)) {
             console.log('Request already canceled:', requestId);
@@ -154,7 +228,12 @@ app.post('/groq', async (req, res) => {
 
 app.post('/ollama/chat', async (req, res) => {
     if (localaiBaseUrl) {
-        await handleApiRequest(req, res, `${localaiBaseUrl}/chat/completions`, null, 'openai');
+        // Serialize LocalAI inference (one model in flight on the Jetson) and
+        // pass the bearer key + stream-reasoning backfill.
+        await runSerialized(() => handleApiRequest(
+            req, res, `${localaiBaseUrl}/chat/completions`, localaiApiKey, 'openai',
+            {}, { streamReasoning: true }
+        ));
     } else {
         await handleApiRequest(req, res, `${ollamaBaseUrl}chat`, null, 'ollama', { context: "" });
     }
@@ -169,7 +248,8 @@ app.post('/custom', async (req, res) => {
 app.get('/ollama/tags', async (req, res) => {
     try {
         if (localaiBaseUrl) {
-            const response = await axios.get(`${localaiBaseUrl}/models`);
+            const headers = localaiApiKey ? { Authorization: `Bearer ${localaiApiKey}` } : {};
+            const response = await axios.get(`${localaiBaseUrl}/models`, { headers });
             const models = response.data.data.map(m => ({ name: m.id, model: m.id }));
             res.json({ models });
         } else {

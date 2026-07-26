@@ -199,8 +199,9 @@ function returnLinkNodes() {
 
     //for interface.js link node drop handler
 function processLinkInput(linkInput) {
-    if (String.isUrl(linkInput)) {
-        const node = new LinkNode(linkInput, linkInput);
+    const url = String.maybeUrl(linkInput);
+    if (url) {
+        const node = new LinkNode(url, linkInput);
         node.typeNode.toggleViewer();
         setupNodeForPlacement(node, toDZ(new vec2(0, -node.view.div.offsetHeight / 4)));
         return node

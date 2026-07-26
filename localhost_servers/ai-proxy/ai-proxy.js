@@ -10,8 +10,11 @@ let anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 let groqApiKey = process.env.GROQ_API_KEY;
 let customApiKey = process.env.CUSTOM_API_KEY;
 
-// Ollama Base URL
+// Ollama Base URL (used when LOCALAI_BASE_URL is not set)
 let ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/api/';
+
+// LocalAI Base URL — when set, overrides the Ollama routes with LocalAI's OpenAI-compatible API
+const localaiBaseUrl = process.env.LOCALAI_BASE_URL || null;
 
 // Endpoint to receive API keys from the client-side JavaScript
 app.post('/api-keys', (req, res) => {
@@ -56,7 +59,20 @@ function modifyResponseByApiType(apiType, response, res, stream, requestId) {
                 reject(error);
             });
         } else {
-            res.json(response.data);
+            // For thinking models (e.g. Qwen3), LocalAI puts CoT output in
+            // response.data.choices[].message.reasoning and leaves content empty.
+            // Fall back to reasoning so Neurite receives something usable.
+            const data = response.data;
+            if (data && Array.isArray(data.choices)) {
+                data.choices.forEach(choice => {
+                    if (choice.message &&
+                        (choice.message.content === '' || choice.message.content == null) &&
+                        choice.message.reasoning) {
+                        choice.message.content = choice.message.reasoning;
+                    }
+                });
+            }
+            res.json(data);
             cleanup();
             resolve();
         }
@@ -137,7 +153,11 @@ app.post('/groq', async (req, res) => {
 });
 
 app.post('/ollama/chat', async (req, res) => {
-    await handleApiRequest(req, res, `${ollamaBaseUrl}chat`, null, 'ollama', { context: "" });
+    if (localaiBaseUrl) {
+        await handleApiRequest(req, res, `${localaiBaseUrl}/chat/completions`, null, 'openai');
+    } else {
+        await handleApiRequest(req, res, `${ollamaBaseUrl}chat`, null, 'ollama', { context: "" });
+    }
 });
 
 app.post('/custom', async (req, res) => {
@@ -148,11 +168,17 @@ app.post('/custom', async (req, res) => {
 
 app.get('/ollama/tags', async (req, res) => {
     try {
-        const response = await axios.get(`${ollamaBaseUrl}tags`);
-        res.json(response.data);
+        if (localaiBaseUrl) {
+            const response = await axios.get(`${localaiBaseUrl}/models`);
+            const models = response.data.data.map(m => ({ name: m.id, model: m.id }));
+            res.json({ models });
+        } else {
+            const response = await axios.get(`${ollamaBaseUrl}tags`);
+            res.json(response.data);
+        }
     } catch (error) {
-        console.error('Error fetching Ollama tags:', error);
-        res.status(500).json({ error: 'Failed to fetch Ollama tags' });
+        console.error('Error fetching model tags:', error);
+        res.status(500).json({ error: 'Failed to fetch model tags' });
     }
 });
 app.get('/ollama/library', async (req, res) => {

@@ -99,6 +99,46 @@ function performZoom(amount, dest) {
         .pan_set(dest.scale(1 - inverseAmount).plus(Graph.pan.scale(inverseAmount)));
 }
 
+// Wheel inertia: accumulate zoom/pan deltas from wheel events and bleed them
+// off in a rAF loop so each event eases in/out across several frames.
+// Tuning: SMOOTH_ALPHA controls per-frame consumption (higher = snappier).
+const WHEEL_SMOOTH_ALPHA = 0.22;
+const WHEEL_SMOOTH_EPS = 1e-4;
+let wheelZoomAccum = 0;          // log-zoom delta still owed (sign: + zooms in)
+let wheelPanAccum = new vec2(0, 0); // screen-px delta still owed (post-panSpeed scale)
+let wheelSmoothScheduled = false;
+
+function tickWheelSmooth() {
+    wheelSmoothScheduled = false;
+    let alive = false;
+
+    if (Math.abs(wheelZoomAccum) > WHEEL_SMOOTH_EPS) {
+        const step = wheelZoomAccum * WHEEL_SMOOTH_ALPHA;
+        wheelZoomAccum -= step;
+        performZoom(Math.exp(step), Graph.vecToZ());
+        alive = true;
+    } else {
+        wheelZoomAccum = 0;
+    }
+
+    if (wheelPanAccum.mag() > WHEEL_SMOOTH_EPS) {
+        const step = wheelPanAccum.scale(WHEEL_SMOOTH_ALPHA);
+        wheelPanAccum = wheelPanAccum.minus(step);
+        Graph.pan_incBy(toDZ(step));
+        alive = true;
+    } else {
+        wheelPanAccum = new vec2(0, 0);
+    }
+
+    if (alive) scheduleWheelSmooth();
+}
+
+function scheduleWheelSmooth() {
+    if (wheelSmoothScheduled) return;
+    wheelSmoothScheduled = true;
+    requestAnimationFrame(tickWheelSmooth);
+}
+
 // Constants
 const DRAG_THRESHOLD = 1; // pixels
 
@@ -312,24 +352,24 @@ class Interface {
         }
 
         if (settings.zoomClick === "scroll") {
-            // Zooming via scroll wheel
+            // Zooming via scroll wheel — accumulate into the inertia buffer.
             Autopilot.stop();
             Coordinate.deselect();
             App.menuContext.hide();
             this.coordsLive = true;
-            const dest = Graph.vecToZ();
             regenAmount += Math.abs(-e.deltaY);
-            const amount = Math.exp(-e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier);
-            performZoom(amount, dest);
+            wheelZoomAccum += -e.deltaY * settings.zoomSpeed * settings.zoomSpeedMultiplier;
+            scheduleWheelSmooth();
             e.stopPropagation();
         } else if (settings.panClick === "scroll") {
-            // Panning via scroll wheel
+            // Panning via scroll wheel — accumulate into the inertia buffer.
             Autopilot.stop();
             this.coordsLive = true;
-            let dest = Graph.vecToZ();
-            const dp = toDZ(new vec2(e.deltaX, -e.deltaY).scale(settings.panSpeed));
             regenAmount += Math.hypot(e.deltaX, e.deltaY);
-            Graph.pan_incBy(dp);
+            wheelPanAccum = wheelPanAccum.plus(
+                new vec2(e.deltaX, -e.deltaY).scale(settings.panSpeed)
+            );
+            scheduleWheelSmooth();
             e.stopPropagation();
         }
     }

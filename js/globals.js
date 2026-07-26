@@ -434,7 +434,7 @@ class Svg {
 //ai.js
 
 const Host = {
-    baseUrl: 'http://localhost:7070',
+    baseUrl: '',
     urlForPath(path){
         const url = this.baseUrl + path;
         Logger.debug("Made url:", url);

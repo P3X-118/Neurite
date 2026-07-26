@@ -9,7 +9,22 @@ export default defineConfig({
         minify: false
     },
     server: {
-        port: 8080
+        port: 8080,
+        host: true,
+        allowedHosts: ['hal.yeet.fm', 'dex.sgc.ai', 'localhost', '127.0.0.1'],
+        proxy: {
+            // Strip /aiproxy/ prefix to match server.js routes (mirrors nginx prod config).
+            '/aiproxy': {
+                target: 'http://127.0.0.1:7070',
+                changeOrigin: true,
+                rewrite: (p) => p.replace(/^\/aiproxy/, '')
+            },
+            // start_servers.js mounts each sub-server at /<name>; keep the prefix.
+            '^/(check|webscrape|wikisearch|wolframalpha|directaccess|automation)': {
+                target: 'http://127.0.0.1:7071',
+                changeOrigin: true
+            }
+        }
     },
     worker: {
         format: 'es'

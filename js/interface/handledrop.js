@@ -186,12 +186,14 @@ class DropHandler {
         const uriList = ev.dataTransfer.getData('text/uri-list');
         const plainText = ev.dataTransfer.getData('text/plain');
 
-        if (uriList && String.maybeUrl(uriList)) {
-            return this.createLinkNode(uriList);
+        const uriMaybe = uriList && String.maybeUrl(uriList);
+        if (uriMaybe) {
+            return this.createLinkNode(uriMaybe);
         }
 
-        if (plainText && String.maybeUrl(plainText)) {
-            return this.createLinkNode(plainText);
+        const plainMaybe = plainText && String.maybeUrl(plainText);
+        if (plainMaybe) {
+            return this.createLinkNode(plainMaybe);
         }
 
         this.handleOSFileDrop(ev);
@@ -326,7 +328,8 @@ function handlePasteData(pastedData, target) {
     }
 
     if (String.isUrl(pastedData)) {
-        const node = new LinkNode(pastedData, pastedData);
+        const url = String.maybeUrl(pastedData) || pastedData;
+        const node = new LinkNode(url, pastedData);
         setupNodeForPlacement(node);
     } else if (String.isIframe(pastedData)) {
         const iframeUrl = getIframeUrl(pastedData);

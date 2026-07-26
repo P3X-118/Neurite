@@ -211,7 +211,10 @@ class LinkNode {
     // TODO: Handle blobs
     updateViewerSrc(url) {
         const node = this.node;
-        this.link = url || node.linkUrl;
+        const raw = url || node.linkUrl || this.link;
+        this.link = (raw && !raw.startsWith('blob:') && !raw.startsWith('data:') && !raw.startsWith('about:'))
+            ? (String.maybeUrl(raw) || raw)
+            : raw;
         this.viewer.setAttribute('src', this.link);
         this.linkWrapper.style.display = 'none';
         this.viewerWrapper.style.display = 'block';

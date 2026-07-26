@@ -135,20 +135,26 @@ class NodeView {
             Array.from(wrapperDivs).forEach(div => div.classList.remove('no-select'));
         });
 
+        let singleClickTimer = null;
+
+        On.click(windowDiv, (e) => {
+            if (e.target.closest('.button-container, .resize-handle, .resize-container')) return;
+            clearTimeout(singleClickTimer);
+            singleClickTimer = setTimeout(() => {
+                Autopilot.zoomToFitFrame(node).targetZoom_scaleBy(1.2).start();
+            }, 250);
+        });
+
         On.dblclick(windowDiv, (e) => {
-            const isTextArea = e.target.tagName === 'TEXTAREA';
-            const isContentEditable = e.target.closest('[contenteditable="true"]');
+            if (e.target.closest('.button-container, .resize-handle, .resize-container')) return;
 
-            const isTextInteraction = isTextArea || isContentEditable;
-            const altHeld = e.getModifierState(controls.altKey.value);
+            clearTimeout(singleClickTimer);
 
-            if (isTextInteraction && !altHeld) {
-                return; // Don’t toggle anchoring if inside text and Alt is not held
+            if (this._fullscreenOverlay) {
+                this.exitFullscreen();
+            } else {
+                this.enterFullscreen();
             }
-
-            node.anchor = node.pos;
-            node.anchorForce = 1 - node.anchorForce;
-            node.toggleWindowAnchored(node.anchorForce === 1);
             e.stopPropagation();
         });
     }
@@ -254,6 +260,30 @@ class NodeView {
             On.focus(this.titleInput, () => this.updateSvgStrokeColor(true));
             On.blur(this.titleInput, () => this.updateSvgStrokeColor(false));
         }
+    }
+
+    enterFullscreen() {
+        const overlay = document.createElement('div');
+        overlay.className = 'node-fullscreen-overlay';
+        document.body.appendChild(overlay);
+        this._fullscreenParent = this.div.parentNode;
+        overlay.appendChild(this.div);
+        this._fullscreenOverlay = overlay;
+
+        this._fullscreenEscHandler = (e) => {
+            if (e.key === 'Escape') this.exitFullscreen();
+        };
+        document.addEventListener('keydown', this._fullscreenEscHandler);
+    }
+
+    exitFullscreen() {
+        if (!this._fullscreenOverlay) return;
+        if (this._fullscreenParent) this._fullscreenParent.appendChild(this.div);
+        this._fullscreenOverlay.remove();
+        this._fullscreenOverlay = null;
+        this._fullscreenParent = null;
+        document.removeEventListener('keydown', this._fullscreenEscHandler);
+        this._fullscreenEscHandler = null;
     }
 
     updateSvgStrokeColor = (focused) => {

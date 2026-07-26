@@ -16,8 +16,12 @@ const PORT = process.env.PORT || 7070;
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
+const corsOrigins = ['https://neurite.network', 'http://localhost:8080'];
+if (process.env.CORS_ORIGIN) {
+  corsOrigins.push(...process.env.CORS_ORIGIN.split(',').map(s => s.trim()));
+}
 const corsOptions = {
-  origin: ['https://neurite.network', 'http://localhost:8080'],
+  origin: corsOrigins,
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
   optionsSuccessStatus: 204

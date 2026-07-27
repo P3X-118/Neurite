@@ -1,0 +1,9 @@
+{
+  "name": "neurite-browser-fetch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure headless-browser fetch sidecar: WAF-proof doc fetch + (later) per-node render + agent automation.",
+  "main": "browser-fetch.js",
+  "scripts": { "start": "xvfb-run -a node browser-fetch.js" },
+  "dependencies": { "express": "^4.19.2", "playwright": "1.49.0" }
+}

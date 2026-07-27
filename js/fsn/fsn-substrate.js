@@ -22,12 +22,13 @@ const WORLD_SCALE = 12.0;
 
 let fsn = null;
 
-/** True when fsn is the active substrate (feature flag). Off => fractal, unchanged. */
+/** True when fsn is the active substrate (feature flag only — NOT whether fsn has
+ * finished initializing, else boot never triggers). The shims below no-op until
+ * `fsn` is ready, so activating before init is safe. */
 export function isFsnActive() {
   return (
-    fsn !== null &&
-    (globalThis.FSN_SUBSTRATE === true ||
-      new URLSearchParams(location.search).get('substrate') === 'fsn')
+    globalThis.FSN_SUBSTRATE === true ||
+    new URLSearchParams(location.search).get('substrate') === 'fsn'
   );
 }
 

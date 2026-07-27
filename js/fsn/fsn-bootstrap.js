@@ -1,0 +1,60 @@
+// Additive bootstrap: when the fsn substrate flag is on, mount an fsn canvas as
+// the background layer and start rendering it. Non-invasive — imports cleanly and
+// does NOTHING unless `?substrate=fsn` (or window.FSN_SUBSTRATE=true) is set, so
+// the fractal build is byte-for-byte unaffected when off.
+//
+// The node-placement + camera-input swaps are the documented core edits (README);
+// this file gets the fsn landscape drawing so those edits have something to ride on.
+
+import { isFsnActive, initFsnSubstrate, fsnStep, fsnOrbit, fsnZoom, fsnResize } from './fsn-substrate.js';
+
+export async function bootFsnSubstrate() {
+  if (!isFsnActive()) return null;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const canvas = document.createElement('canvas');
+  canvas.id = 'fsn-canvas';
+  Object.assign(canvas.style, {
+    position: 'fixed',
+    inset: '0',
+    width: '100vw',
+    height: '100vh',
+    zIndex: '0', // behind Neurite's #nodes / edges overlay
+    display: 'block',
+  });
+  const sizeBuffer = () => {
+    canvas.width = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+  };
+  sizeBuffer();
+  document.body.insertBefore(canvas, document.body.firstChild);
+
+  await initFsnSubstrate(canvas);
+
+  // Own render loop for the substrate (the node layer's placement is swapped
+  // separately, in Node.draw — see README).
+  let last = performance.now();
+  const loop = (now) => {
+    const dt = Math.min((now - last) / 1000, 0.1);
+    last = now;
+    fsnStep(dt);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+
+  // Route drag/wheel to fsn's orbit camera (until Neurite's own camera input is
+  // rewired per the README).
+  let dragging = false, lx = 0, ly = 0;
+  addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; ly = e.clientY; });
+  addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
+    lx = e.clientX; ly = e.clientY;
+  });
+  addEventListener('pointerup', () => { dragging = false; });
+  addEventListener('wheel', (e) => fsnZoom(-e.deltaY * 0.01), { passive: true });
+  addEventListener('resize', () => { sizeBuffer(); fsnResize(canvas.width, canvas.height); });
+
+  console.log('[fsn] substrate active — landscape mounted behind the node layer');
+  return canvas;
+}

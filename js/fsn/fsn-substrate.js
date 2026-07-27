@@ -58,6 +58,20 @@ export function fsnFromZtoUV(z) {
 }
 
 /**
+ * world (Neurite `vec2`) -> screen CSS px {x,y}, or null if behind the camera.
+ * The direct-px variant of fsnFromZtoUV — Node.draw sets style.left/top from it.
+ */
+export function fsnProjectPx(z) {
+  if (!fsn) return null;
+  const p = fsn.project(z.x * WORLD_SCALE, 0, z.y * WORLD_SCALE); // [sx,sy] physical px, or undefined
+  if (!p) return null;
+  const c = document.getElementById('fsn-canvas');
+  const rx = c && c.width ? c.clientWidth / c.width : 1; // physical px -> CSS px
+  const ry = c && c.height ? c.clientHeight / c.height : 1;
+  return { x: p[0] * rx, y: p[1] * ry };
+}
+
+/**
  * screen px -> world (Neurite complex `vec2`) on fsn's ground plane. Reimplements
  * `Graph.xyToZ`/`vecToZ` — node create/drag/pick. `px,py` are CSS px; pass the
  * device-pixel ratio the canvas is scaled by.

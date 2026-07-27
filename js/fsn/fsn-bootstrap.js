@@ -6,7 +6,15 @@
 // The node-placement + camera-input swaps are the documented core edits (README);
 // this file gets the fsn landscape drawing so those edits have something to ride on.
 
-import { isFsnActive, initFsnSubstrate, fsnStep, fsnOrbit, fsnZoom, fsnResize } from './fsn-substrate.js';
+import {
+  isFsnActive, initFsnSubstrate, fsnStep, fsnOrbit, fsnZoom, fsnResize,
+  fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
+} from './fsn-substrate.js';
+
+// Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
+// scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
+// Attached unconditionally (cheap; they no-op/return null until fsn is ready).
+Object.assign(globalThis, { isFsnActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ });
 
 export async function bootFsnSubstrate() {
   if (!isFsnActive()) return null;
@@ -58,3 +66,6 @@ export async function bootFsnSubstrate() {
   console.log('[fsn] substrate active — landscape mounted behind the node layer');
   return canvas;
 }
+
+// Auto-boot when this module is loaded (no-ops unless ?substrate=fsn is set).
+bootFsnSubstrate();

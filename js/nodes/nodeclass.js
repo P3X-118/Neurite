@@ -104,6 +104,21 @@ class Node {
 
     draw() {
         const e = this.content;
+        // fsn substrate: place the node on the fsn 3D landscape via projection.
+        // Gated by window.isFsnActive — the fractal path below is byte-identical
+        // when the flag is off. (fsn path: WORLD_SCALE + node scale need live tuning.)
+        if (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive()) {
+            const sf = this.intrinsicScale * this.scale; // TODO tune vs fsn camera distance
+            e.style.position = 'absolute';
+            e.style.transform = 'scale(' + sf + ',' + sf + ')';
+            const scr = window.fsnProjectPx(this.pos); // {x,y} CSS px, or null (behind camera)
+            if (!scr) { e.style.display = 'none'; return; }
+            e.style.display = 'initial';
+            const bbf = e.getBoundingClientRect();
+            e.style.left = (scr.x - bbf.width * 0.5 / sf) + 'px';
+            e.style.top = (scr.y - bbf.height * 0.5 / sf) + 'px';
+            return;
+        }
         const s = this.intrinsicScale * this.scale * (Graph.zoom.mag2() ** -settings.zoomContentExp);
 
         const svgbb = svg.getBoundingClientRect();
@@ -156,6 +171,8 @@ class Node {
 
     applyMandelbrotForce() {
         if (this.anchorForce !== 0) return;
+        // fsn substrate has no fractal gradient field — skip the fractal flow force.
+        if (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive()) return;
 
         const g = Fractal.grad(settings.iterations, this.pos);
 

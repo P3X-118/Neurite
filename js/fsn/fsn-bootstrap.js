@@ -16,6 +16,11 @@ import {
 // Attached unconditionally (cheap; they no-op/return null until fsn is ready).
 Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ });
 
+// IRIX frame: stamp `html.irix` when fsn is the substrate so the scoped IRIX
+// theme stylesheet (js/fsn/irix.css) cleanly takes over Neurite's chrome —
+// a single structural toggle, not per-element style hacks.
+if (isFsnActive()) document.documentElement.classList.add('irix');
+
 // The fractal is FUNCTIONALLY DISABLED (not CSS-hidden) when fsn is the substrate:
 // the render loop skips it (js/nodes/nodeinteraction/nodestep.js) and any startup
 // render is gated too, so no fractal compute runs — nothing to hide.

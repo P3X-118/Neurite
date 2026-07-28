@@ -1,0 +1,38 @@
+/* IRIX theme overrides — the fsn/IRIX visualization is the primary frame.
+ *
+ * Scoped entirely under `html.irix` (stamped by fsn-bootstrap.js when fsn is the
+ * substrate), and loaded LAST in index.html so it wins by order. Nothing here
+ * applies when the admin runs `?viz=fractal`. This is theme/chrome only — the
+ * fractal *process* is functionally disabled in JS (nodestep + mandelbrot), not here.
+ *
+ * SGI palette (matches the fsn landscape so Neurite's chrome stops clashing):
+ *   void bg    rgba(4,22,28,0.86)   border/accent  #0bd6c2   bright accent #0ff
+ *   text       #7ff0e0              dim text        #4cc
+ */
+
+/* --- Drop obsolete fractal-era chrome (pure cosmetic / no function under fsn) --- */
+html.irix #blur-filter,
+html.irix #invert-filter { display: none !important; }
+
+/* Fractal-settings tab launcher is obsolete once fsn replaces the Mandelbrot. */
+html.irix .tablink[onclick*="tab2"] { display: none !important; }
+
+/* --- Re-skin the main chrome surfaces toward the SGI look (containers only; deep
+ *     component theming comes with the M2 re-parenting, done with eyes on it). --- */
+html.irix .dropdown-content,
+html.irix .node-panel,
+html.irix .function-call-panel,
+html.irix #customContextMenu {
+    background: rgba(4, 22, 28, 0.86) !important;
+    border: 1px solid #0bd6c2 !important;
+    color: #7ff0e0 !important;
+    backdrop-filter: blur(4px);
+}
+
+/* Menu icon bars + tab accents in SGI teal. */
+html.irix .menu-icon,
+html.irix .menu-icon::before,
+html.irix .menu-icon::after { background: #0bd6c2 !important; }
+
+html.irix .tablink.activeTab { color: #0ff !important; }
+html.irix .tablink { color: #4cc !important; }

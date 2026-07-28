@@ -22,14 +22,25 @@ const WORLD_SCALE = 12.0;
 
 let fsn = null;
 
-/** True when fsn is the active substrate (feature flag only — NOT whether fsn has
- * finished initializing, else boot never triggers). The shims below no-op until
- * `fsn` is ready, so activating before init is safe. */
+/** Which visualization is the substrate. **IRIX/fsn is the DEFAULT**; the Neurite
+ * fractal is admin-only, off unless explicitly turned on (`?viz=fractal` or
+ * `window.NEURITE_FRACTAL = true`). This is the "IRIX is the primary theme" rule. */
+export function fsnVizMode() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('viz') === 'fractal' || globalThis.NEURITE_FRACTAL === true) return 'fractal';
+  return 'fsn';
+}
+
+/** True when fsn is the active substrate (the default). Checks the mode only —
+ * NOT whether fsn finished initializing (else boot never triggers); the shims
+ * below no-op until `fsn` is ready, so activating before init is safe. */
 export function isFsnActive() {
-  return (
-    globalThis.FSN_SUBSTRATE === true ||
-    new URLSearchParams(location.search).get('substrate') === 'fsn'
-  );
+  return fsnVizMode() === 'fsn';
+}
+
+/** True only when an admin explicitly re-enabled the Neurite fractal. */
+export function isFractalActive() {
+  return fsnVizMode() === 'fractal';
 }
 
 /** One-time init: bind fsn to a canvas layered under Neurite's #nodes overlay. */

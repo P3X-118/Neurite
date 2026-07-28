@@ -184,6 +184,10 @@ Svg.oldPan = new vec2(0, 0);
 Svg.pan = new vec2(0, 0);
 
 Svg.updateViewbox = function() {
+    // fsn substrate: the fractal SVG camera is functionally disabled at the
+    // source, so no caller (render loop, autopilot/neuralapi, …) spins up
+    // fractal-camera compute. The default; admin re-enables via ?viz=fractal.
+    if (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive()) return;
     const zoom_mag = Graph.zoom.mag();
     let left_corner = (new vec2(-zoom_mag, -zoom_mag).plus(Graph.pan)).toSvg();
     const diameter = zoom_mag * 2 * this.zoom;
@@ -712,6 +716,8 @@ Fractal.hair_svg_path_delayed = function(pt, num_pts_max) {
     return path;
 }
 Fractal.render_hair = function(num_pts_max) {
+    // fsn substrate: fractal hair rendering disabled at the source.
+    if (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive()) return;
     const random_point = Fractal.sample_random_point();
     const path = (settings.useDelayedRendering && settings.renderDelay !== 0)
         ? Fractal.hair_svg_path_delayed(random_point, num_pts_max)

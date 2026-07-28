@@ -7,14 +7,18 @@
 // this file gets the fsn landscape drawing so those edits have something to ride on.
 
 import {
-  isFsnActive, initFsnSubstrate, fsnStep, fsnOrbit, fsnZoom, fsnResize,
+  isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnOrbit, fsnZoom, fsnResize,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 
 // Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
 // scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
 // Attached unconditionally (cheap; they no-op/return null until fsn is ready).
-Object.assign(globalThis, { isFsnActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ });
+Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ });
+
+// The fractal is FUNCTIONALLY DISABLED (not CSS-hidden) when fsn is the substrate:
+// the render loop skips it (js/nodes/nodeinteraction/nodestep.js) and any startup
+// render is gated too, so no fractal compute runs — nothing to hide.
 
 export async function bootFsnSubstrate() {
   if (!isFsnActive()) return null;

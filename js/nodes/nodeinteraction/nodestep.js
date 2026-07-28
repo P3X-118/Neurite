@@ -157,11 +157,20 @@ class NodeSimulation {
         if (App.selectedNodes.uuids.size > 0) this.processSelectedNodes();
 
         Autopilot.update(time);
-        Svg.updateViewbox();
-        this.updateMousePath();
-        this.updateMousePathWidth();
+        const fsn = (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive());
+        // Fractal render (SVG viewbox camera, mouse-path, hair regen) is OFF when
+        // fsn is the substrate (the default). Node placement still runs.
+        if (!fsn) {
+            Svg.updateViewbox();
+            this.updateMousePath();
+            this.updateMousePathWidth();
+        }
         const dt = this.updateFPS(time);
-        this.updateNodes(dt).updateEdges(dt).updateRegen();
+        if (fsn) {
+            this.updateNodes(dt); // fsn positions nodes; edges/regen are fractal-era, skipped
+        } else {
+            this.updateNodes(dt).updateEdges(dt).updateRegen();
+        }
 
         window.requestAnimationFrame(this.nodeStep);
     }

@@ -132,7 +132,9 @@ Keys.getAll = async function(){
     return (await Request.send(new Keys.fetcher())) || []
 }
 Keys.fetcher = class {
-    url = Host.urlForPath('/webscrape/get-keys');
+    // LocalRecall-backed store (the retired webscrape sqlite VDB kept keys at
+    // /webscrape/get-keys).
+    url = Host.urlForPath('/recall/keys');
     onResponse(res){ return res.json() }
     onFailure(){ return "Failed to fetch keys:" }
 }
@@ -325,7 +327,7 @@ Keys.deleteKey = async function(key){
     await Request.send(new Keys.eraser(key))
 }
 Keys.eraser = class {
-    static baseUrl = Host.urlForPath('/webscrape/delete-chunks?key=');
+    static baseUrl = Host.urlForPath('/recall/delete?key=');
     options = {
         method: 'DELETE'
     };
@@ -487,8 +489,8 @@ async function storeTextData(storageId, text) {
     const chunkedText = await handleChunkText(text, MAX_CHUNK_SIZE, overlapSize, storageId);
     if (chunkedText === null) return;
 
-    const chunkedEmbeddings = await Embeddings.fetchChunked(chunkedText, storageId);
-    await storeEmbeddingsAndChunksInDatabase(storageId, chunkedText, chunkedEmbeddings);
+    // LocalRecall embeds server-side — no client-side embedding pass needed.
+    await storeEmbeddingsAndChunksInDatabase(storageId, chunkedText);
 }
 
 async function handleNotExtractedLinks(notExtractedLinks, linkNodes) {
@@ -553,53 +555,28 @@ async function receiveAndStoreByType(text, storageId, url) {
 
 // Vector DB
 
-async function storeEmbeddingsAndChunksInDatabase(key, chunks, embeddings) {
-    Logger.info("Preparing to store embeddings and text chunks for key:", key);
-    const selectedModel = Embeddings.selectModel.value;
+async function storeEmbeddingsAndChunksInDatabase(key, chunks, _embeddings) {
+    // LocalRecall-backed store: the browser sends TEXT only and the estate RAG
+    // service embeds server-side, so any client-computed `_embeddings` (legacy
+    // callers still pass them) are deliberately ignored — no vectors at rest
+    // client-side, no embed-model/dimension coupling in the frontend.
+    Logger.info("Storing text chunks in LocalRecall for key:", key);
     const updateProgressBar = VectorDb.funcUpdateProgressBarForKey(key);
     updateProgressBar(0);
 
     try {
-        // First, validate all chunks and embeddings
-        if (chunks.length !== embeddings.length) {
-            throw new Error("Mismatch between chunks and embeddings count");
-        }
-
-        const requests = chunks.map((chunk, i) => {
-            return {
-                key: key + "_chunk_" + i,
-                embeddings: [
-                    {
-                        embedding: embeddings[i],
-                        source: selectedModel
-                    }
-                ],
-                text: chunk
-            };
+        const response = await fetch(Host.urlForPath('/recall/store'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, chunks })
         });
-
-        // Now send all requests
-        for (let i = 0; i < requests.length; i++) {
-            const response = await fetch(Host.urlForPath('/webscrape/store-embedding-and-text'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requests[i])
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to store chunk ${i} for key ${key}: ${response.statusText}`);
-            }
-
-            const progress = 100 * (i + 1) / chunks.length;
-            updateProgressBar(progress);
+        if (!response.ok) {
+            throw new Error(`Failed to store chunks for key ${key}: ${response.statusText}`);
         }
-
-        Logger.info("Completed storing embeddings and chunks for", key);
+        Logger.info("Completed storing chunks for", key);
         return true;
     } catch (err) {
-        Logger.err(`Failed to store chunks and embeddings for key ${key}:`, err);
+        Logger.err(`Failed to store chunks for key ${key}:`, err);
         throw err;
     } finally {
         updateProgressBar(100);
@@ -611,15 +588,10 @@ async function storeEmbeddingsAndChunksInDatabase(key, chunks, embeddings) {
 }
 
 async function storeAdditionalEmbedding(key, source, embedding) {
-    await Request.send(new storeAdditionalEmbedding.ct(key, source, embedding));
-}
-storeAdditionalEmbedding.ct = class {
-    url = Host.urlForPath('/webscrape/store-additional-embedding');
-    constructor(key, source, embedding){
-        this.options = Request.makeJsonOptions('POST', { key, source, embedding })
-    }
-    onSuccess(){ return "Additional embedding stored successfully" }
-    onFailure(){ return "Failed to store additional embedding:" }
+    // Retired with the webscrape VDB: LocalRecall owns embeddings server-side,
+    // so there is no per-model vector cache to append to. Kept as a no-op for
+    // any legacy callers.
+    Logger.debug("storeAdditionalEmbedding is retired (LocalRecall embeds server-side):", key, source);
 }
 
 async function handleChunkText(text, maxLength, overlapSize, storageId, shouldConfirm = true) {
@@ -735,32 +707,31 @@ async function getRelevantChunks(searchQuery, topN, relevantKeys = []) {
         Logger.warn("No relevant keys provided for fetching embeddings.");
         return [];
     }
-    console.log(relevantKeys);
-    const selectedModel = Embeddings.selectModel.value;
-    const relevantEmbeddings = await fetchEmbeddingsForKeys(relevantKeys, selectedModel);
-    const queryEmbedding = await Embeddings.fetch(searchQuery, selectedModel);
-
-    // Process embeddings and calculate similarities
-    const topNChunks = await Promise.all(relevantEmbeddings.map(async (embedding) => {
-        let embeddingVector = embedding.embedding;
-        if (!embeddingVector) {
-            embeddingVector = await Embeddings.fetch(embedding.text, selectedModel);
-            await storeAdditionalEmbedding(embedding.key, selectedModel, embeddingVector);
+    // LocalRecall-backed semantic search: the query goes over as TEXT and the
+    // ranking happens server-side — no client embeddings, no cosine loop, no
+    // on-demand vector backfill. Results arrive ranked and key-filtered.
+    try {
+        const response = await fetch(Host.urlForPath('/recall/search'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchQuery, keys: relevantKeys, topN })
+        });
+        if (!response.ok) {
+            throw new Error(`search failed: ${response.statusText}`);
         }
-
-        const similarity = await calculateSimilarity([{ embedding: embeddingVector }], queryEmbedding, selectedModel);
-        return {
-            key: embedding.key,
-            text: embedding.text,
-            source: selectedModel,
-            relevanceScore: similarity[0].similarity
-        };
-    }));
-
-    topNChunks.sort((a, b) => b.relevanceScore - a.relevanceScore);
-    const firstN = topNChunks.slice(0, topN);
-    Logger.info("Top N Chunks:", firstN);
-    return firstN;
+        const hits = await response.json();
+        const topNChunks = hits.map( (hit)=>({
+            key: (typeof hit.chunk === 'number' ? hit.key + "_chunk_" + hit.chunk : hit.key),
+            text: hit.text,
+            source: 'localrecall',
+            relevanceScore: hit.relevanceScore
+        }) );
+        Logger.info("Top N Chunks:", topNChunks);
+        return topNChunks;
+    } catch (err) {
+        Logger.err("In LocalRecall chunk search:", err);
+        return [];
+    }
 }
 
 // Helper function to calculate cosine similarity for a list of embeddings

@@ -21,11 +21,6 @@
     "main": "index.js"
   },
   {
-    "name": "AIProxy",
-    "dir": "./ai-proxy",
-    "main": "ai-proxy.js"
-  },
-  {
     "name": "DirectAccess",
     "dir": "./direct-access",
     "main": "direct-access.js"

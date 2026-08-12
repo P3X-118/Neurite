@@ -46,7 +46,7 @@ export function isFractalActive() {
 /** One-time init: bind fsn to a canvas layered under Neurite's #nodes overlay. */
 export async function initFsnSubstrate(canvas) {
   await init(wasmUrl);
-  fsn = await FsnEmbed.create(canvas);
+  fsn = await FsnEmbed.create_live(canvas);
   return fsn;
 }
 

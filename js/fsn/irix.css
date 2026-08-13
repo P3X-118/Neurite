@@ -36,3 +36,35 @@ html.irix .menu-icon::after { background: #0bd6c2 !important; }
 
 html.irix .tablink.activeTab { color: #0ff !important; }
 html.irix .tablink { color: #4cc !important; }
+
+/* Design B Stage 7 — the tag "CONSTRUCT": the 3D towers drop into a matrix void and the
+   bloomed documents correlate. Scoped to html.fsn-construct so it is inert otherwise. */
+#fsn-canvas { transition: opacity .5s ease; }
+html.fsn-construct body::before {
+  content: ''; position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(95,230,208,.05) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, rgba(4,26,24,.30), rgba(1,8,9,.88) 82%);
+  animation: fsn-cx-fade .5s ease;
+}
+@keyframes fsn-cx-fade { from { opacity: 0 } to { opacity: 1 } }
+#fsn-construct-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: none;
+  align-items: center; gap: .6em; justify-content: center; flex-wrap: wrap;
+  padding: .5em .8em; font-family: 'IRIX Term', ui-monospace, monospace; font-size: 13px;
+  letter-spacing: .08em; color: #9ff3e0; text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(6,30,28,.96), rgba(6,26,24,.55));
+  border-bottom: 1px solid rgba(95,230,208,.45);
+  text-shadow: 0 0 6px rgba(95,230,208,.4);
+}
+#fsn-construct-banner .cx-dot { color: #7fffe0; animation: fsn-cx-pulse 1.4s ease-in-out infinite; }
+#fsn-construct-banner .cx-tag { color: #ffd27f; }
+#fsn-construct-banner b { color: #e8fffb; }
+#fsn-construct-exit {
+  margin-left: .5em; padding: .3em 1em; min-height: 44px; cursor: pointer;
+  background: rgba(95,230,208,.12); color: #9ff3e0;
+  border: 1px solid rgba(95,230,208,.55); border-radius: 3px;
+  font: inherit; letter-spacing: .08em; text-transform: uppercase;
+}
+#fsn-construct-exit:hover { background: rgba(95,230,208,.26); }
+@keyframes fsn-cx-pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }

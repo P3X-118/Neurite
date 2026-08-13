@@ -101,6 +101,7 @@ export function fsnStep(dt) {
   fsn.update(dt);
   fsn.render();
   fsnUpdateWires(); // Design B Stage 4b: keep bloomed-node -> tower wires attached
+  if (constructActive) fsnUpdateConstructLinks(); // Stage 7: correlation links in the construct
 }
 
 /** Design B: each frame, slave fsn's camera to Neurite's Graph.pan/zoom so the 3D
@@ -162,6 +163,9 @@ function fsnWiresSvg() {
 
 export function fsnUpdateWires() {
   if (!fsn) return;
+  const wel = document.getElementById('fsn-wires');
+  if (constructActive) { if (wel) wel.style.display = 'none'; return; } // Stage 7: wires drop in the construct
+  if (wel && wel.style.display === 'none') wel.style.display = '';
   bloomWires = bloomWires.filter(w => w.node && !w.node.removed && w.node.content && document.body.contains(w.node.content));
   const el = document.getElementById('fsn-wires');
   if (bloomWires.length === 0) { if (el) el.replaceChildren(); return; }
@@ -246,6 +250,15 @@ export function fsnMenuActions(menu, x, y) {
     menu.menu.append(menu.option('\u25b3 Ascend to parent', () => { h.ascend(); fsnRecenterPan(); }));
     added = true;
   }
+  const Gx = globalThis.Graph;
+  const blooms = Gx ? Object.values(Gx.nodes).filter(n => n && n.isFsnBloom && !n.removed).length : 0;
+  if (constructActive) {
+    menu.menu.append(menu.option('◉ Exit construct', () => fsnExitConstruct()));
+    added = true;
+  } else if (blooms >= 1) {
+    menu.menu.append(menu.option('⊞ Construct: correlate ' + blooms + ' open doc' + (blooms === 1 ? '' : 's'), () => fsnEnterConstruct('open documents')));
+    added = true;
+  }
   return added;
 }
 
@@ -253,8 +266,120 @@ export function fsnMenuActions(menu, x, y) {
 export function fsnNodeMenuActions(menu, node) {
   if (!node) return false;
   menu.menu.append(menu.option('\u2922 Fullscreen / exit', () => fsnToggleNodeFullscreen(node)));
+  if (constructActive) menu.menu.append(menu.option('◉ Exit construct', () => fsnExitConstruct()));
+  else menu.menu.append(menu.option('⊞ Correlate in construct', () => fsnEnterConstruct('open documents')));
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Design B Stage 7 — the tag "CONSTRUCT". Selecting a tag/keyword (or "correlate
+// the open documents") DROPS the 3D towers into a matrix void: the fsn canvas dims,
+// the tower wires drop, and the bloomed document nodes are pulled out of their
+// hierarchy into a correlation ring where their links take UI precedence. It is a
+// view toggle inside the SAME Neurite z-space (the z-camera is kept), so exiting
+// restores the towers exactly where they were.
+let constructActive = false;
+let constructNodes = [];
+let constructSaved = null; // { view, pos[] } to restore on exit
+
+export function fsnInConstruct() { return constructActive; }
+
+export function fsnEnterConstruct(label) {
+  const G = globalThis.Graph;
+  if (constructActive || !G || !G.pan || !G.zoom) return false;
+  const nodes = Object.values(G.nodes).filter(n => n && n.isFsnBloom && !n.removed && n.content);
+  if (nodes.length < 1) return false; // nothing bloomed to correlate yet
+  constructActive = true;
+  constructNodes = nodes;
+  constructSaved = {
+    view: { px: G.pan.x, py: G.pan.y, zx: G.zoom.x, zy: G.zoom.y },
+    pos: nodes.map(n => ({ x: n.pos.x, y: n.pos.y, af: n.anchorForce, anchor: n.anchor })),
+  };
+  // drop the 3D skin into the void (tower wires auto-hide via fsnUpdateWires)
+  const c = document.getElementById('fsn-canvas');
+  if (c) c.style.opacity = '0.1';
+  document.documentElement.classList.add('fsn-construct');
+  // pull the docs out of their hierarchy: freeze them on a ring around the view center
+  const zmag = Math.hypot(G.zoom.x, G.zoom.y) || 1;
+  const R = zmag * (0.6 + 0.14 * nodes.length);
+  nodes.forEach((n, i) => {
+    const a = (i / nodes.length) * Math.PI * 2 - Math.PI / 2;
+    n.pos.x = G.pan.x + Math.cos(a) * R;
+    n.pos.y = G.pan.y + Math.sin(a) * R;
+    n.anchor = n.pos.scale(1); // clone (vec2 is global-lexical, not on window)
+    n.anchorForce = 1;         // freeze here (updatePosition zeros vel/force when anchored)
+    if (n.draw) n.draw();
+  });
+  showConstructBanner(label || 'open documents', nodes.length);
+  return true;
+}
+
+export function fsnExitConstruct() {
+  const G = globalThis.Graph;
+  if (!constructActive) return;
+  const c = document.getElementById('fsn-canvas');
+  if (c) c.style.opacity = '';
+  document.documentElement.classList.remove('fsn-construct');
+  if (constructSaved && G) {
+    constructNodes.forEach((n, i) => {
+      const s = constructSaved.pos[i]; if (!s || !n.pos) return;
+      n.pos.x = s.x; n.pos.y = s.y; n.anchor = s.anchor; n.anchorForce = s.af; // un-freeze
+      if (n.draw) n.draw();
+    });
+    G.pan.x = constructSaved.view.px; G.pan.y = constructSaved.view.py;
+    G.zoom.x = constructSaved.view.zx; G.zoom.y = constructSaved.view.zy;
+  }
+  constructActive = false; constructNodes = []; constructSaved = null;
+  hideConstructBanner();
+  clearConstructLinks();
+}
+
+function fsnConstructSvg() {
+  let el = document.getElementById('fsn-constructlinks');
+  if (!el) {
+    el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    el.id = 'fsn-constructlinks';
+    el.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:2;';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function clearConstructLinks() { const el = document.getElementById('fsn-constructlinks'); if (el) el.replaceChildren(); }
+
+// Correlation links: a complete graph over the construct docs (screen-space, like the tower
+// wires). MVP = "all RAG files correlated against each other"; later, weight/prune by shared
+// tags + LocalRecall relatedness.
+export function fsnUpdateConstructLinks() {
+  const G = globalThis.Graph;
+  if (!constructActive || !G) return;
+  const svg = fsnConstructSvg();
+  const nodes = constructNodes.filter(n => n && !n.removed && n.content && document.body.contains(n.content));
+  const cts = nodes.map(n => { const r = n.content.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  const pairs = [];
+  for (let i = 0; i < cts.length; i++) for (let j = i + 1; j < cts.length; j++) pairs.push([i, j]);
+  while (svg.children.length > pairs.length) svg.removeChild(svg.lastChild);
+  while (svg.children.length < pairs.length) {
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('stroke', '#7fffe0'); ln.setAttribute('stroke-width', '1'); ln.setAttribute('stroke-opacity', '0.45');
+    svg.appendChild(ln);
+  }
+  pairs.forEach(([i, j], k) => {
+    const ln = svg.children[k], a = cts[i], b = cts[j];
+    ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y); ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
+  });
+}
+
+function showConstructBanner(label, n) {
+  let b = document.getElementById('fsn-construct-banner');
+  if (!b) { b = document.createElement('div'); b.id = 'fsn-construct-banner'; document.body.appendChild(b); }
+  b.innerHTML = '<span class="cx-dot">◉</span> CONSTRUCT · correlating <b>' + n + '</b> document' + (n === 1 ? '' : 's') +
+    ' · <span class="cx-tag">' + String(label).replace(/</g, '') + '</span>' +
+    '<button id="fsn-construct-exit">exit ⏎</button>';
+  b.style.display = 'flex';
+  const btn = document.getElementById('fsn-construct-exit');
+  if (btn) btn.onclick = () => { if (globalThis.fsnExitConstruct) globalThis.fsnExitConstruct(); };
+}
+function hideConstructBanner() { const b = document.getElementById('fsn-construct-banner'); if (b) b.style.display = 'none'; }
 
 export function fsnBloomFile(fileJson) {
   if (!fsn || typeof globalThis.createTextNodeWithPosAndScale !== 'function') return null;

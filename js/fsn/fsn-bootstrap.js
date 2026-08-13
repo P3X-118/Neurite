@@ -9,13 +9,14 @@
 import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
   fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions,
+  fsnEnterConstruct, fsnExitConstruct, fsnInConstruct,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 
 // Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
 // scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
 // Attached unconditionally (cheap; they no-op/return null until fsn is ready).
-Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ, fsnHandle, fsnDescendAt, fsnAscend, fsnCurrentPath, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions });
+Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ, fsnHandle, fsnDescendAt, fsnAscend, fsnCurrentPath, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions, fsnEnterConstruct, fsnExitConstruct, fsnInConstruct });
 
 // IRIX frame: stamp `html.irix` when fsn is the substrate so the scoped IRIX
 // theme stylesheet (js/fsn/irix.css) cleanly takes over Neurite's chrome —
@@ -83,6 +84,9 @@ export async function bootFsnSubstrate() {
   // Option C: wheel-zoom is free "approach" (no auto-descend — Neurite's 2D zoom does not
   // cleanly select a vertical floor). Descent is a DELIBERATE double-click on a floor
   // (subfolder) → re-roots the tower onto it. (File double-click → the bloom, Stage 4b.)
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && fsnInConstruct()) { e.preventDefault(); e.stopPropagation(); fsnExitConstruct(); }
+  }, true);
   addEventListener('dblclick', (e) => {
     const path = fsnDescendAt(e.clientX, e.clientY, dpr);
     if (path) { recenter(); console.log('[fsn] descended ->', path); return; }

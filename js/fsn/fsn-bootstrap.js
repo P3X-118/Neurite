@@ -8,6 +8,7 @@
 
 import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
+  fsnDescendAt, fsnAscend, fsnCurrentPath,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 
@@ -74,6 +75,25 @@ export async function bootFsnSubstrate() {
   addEventListener('pointerup', () => { orbiting = false; });
   addEventListener('contextmenu', (e) => { if (orbiting) e.preventDefault(); });
   addEventListener('resize', () => { sizeBuffer(); fsnResize(canvas.width, canvas.height); });
+
+  // Design B descent: a left-CLICK (no drag) on a floor re-roots the tower onto that
+  // subfolder; Backspace ascends. Camera is Graph-driven, so recenter pan on the new
+  // tower (which build_level always places at the origin). fly-by-wire framing.
+  const recenter = () => { const G = globalThis.Graph; if (G && G.pan) { G.pan.x = 0; G.pan.y = 0; } };
+  let dX = 0, dY = 0, dT = 0;
+  addEventListener('pointerdown', (e) => { if (e.button === 0) { dX = e.clientX; dY = e.clientY; dT = performance.now(); } });
+  addEventListener('pointerup', (e) => {
+    if (e.button !== 0) return;
+    if (Math.hypot(e.clientX - dX, e.clientY - dY) > 6 || performance.now() - dT > 500) return; // drag/hold, not a click
+    const path = fsnDescendAt(e.clientX, e.clientY, dpr);
+    if (path) { recenter(); console.log('[fsn] descended ->', path); }
+  });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace' && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {
+      const path = fsnAscend();
+      if (path) { e.preventDefault(); recenter(); console.log('[fsn] ascended ->', path); }
+    }
+  });
 
   console.log('[fsn] substrate active — landscape mounted behind the node layer');
   return canvas;

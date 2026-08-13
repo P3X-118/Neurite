@@ -123,6 +123,18 @@ export function fsnResize(wPx, hPx) {
   if (fsn) fsn.resize(wPx, hPx);
 }
 
+// --- Design B descent: re-root the tower onto a floor's subfolder ---
+/** Pick the floor under a pixel and descend into it. Returns the new root path,
+ * or "" if nothing / a file / floor 0 / a locked inception boundary was hit. */
+export function fsnDescendAt(px, py, dpr = 1) {
+  if (!fsn || !fsn.pick_at) return '';
+  const i = fsn.pick_at(px * dpr, py * dpr);
+  if (i < 1) return '';
+  return fsn.descend(i);
+}
+export function fsnAscend() { return fsn && fsn.ascend ? fsn.ascend() : ''; }
+export function fsnCurrentPath() { return fsn && fsn.current_path ? fsn.current_path() : ''; }
+
 function fsnBufferSize() {
   const c = document.getElementById('fsn-canvas');
   return c ? [c.width, c.height] : [globalThis.innerWidth, globalThis.innerHeight];

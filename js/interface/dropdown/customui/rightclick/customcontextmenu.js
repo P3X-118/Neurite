@@ -42,7 +42,7 @@ Menu.Context = class {
         App.menuSuggestions.repositionIfDisplayed(x, y);
         this.menu.innerHTML = ''; // clear options
         const view = Graph.viewForElem(target);
-        if (!view) return this.populateForGeneric(target);
+        if (!view) return this.populateForGeneric(target, x, y);
 
         this.targetModel = view.model;
         this[view.funcPopulate](x, y);
@@ -64,6 +64,7 @@ Menu.Context = class {
         return input;
     }
     populateForNode(x, y){
+        if (this.targetModel && this.targetModel.isFsnBloom && typeof window.fsnNodeMenuActions === 'function') window.fsnNodeMenuActions(this, this.targetModel);
         this.inputField = this.makeInputField();
         this.menu.append(Html.make.li(this.inputField, 'input-item'));
         this.setupSuggestions(x, y);
@@ -79,6 +80,7 @@ Menu.Context = class {
         );
     }
     populateForBackground(x, y){
+        if (typeof window.fsnMenuActions === 'function') window.fsnMenuActions(this, x, y);
         this.menu.append(
             // Option to create a Text Node (without calling draw)
             this.option("+ Note", createNodeFromWindow),
@@ -89,7 +91,8 @@ Menu.Context = class {
             this.option("Paste", this.onPasteOption.bind(null, this.targetModel))
         )
     }
-    populateForGeneric(target){ // non-SVG targets
+    populateForGeneric(target, x, y){ // non-SVG targets (e.g. the fsn canvas)
+        if (typeof window.fsnMenuActions === 'function' && window.fsnMenuActions(this, x, y)) return;
         const onClick = Logger.info.bind(Logger, "Generic action for:");
         this.menu.append(this.option("Generic Action", onClick, false));
     }

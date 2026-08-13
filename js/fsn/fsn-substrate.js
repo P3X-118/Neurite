@@ -213,6 +213,49 @@ export function fsnToggleNodeFullscreen(node) {
   }
 }
 
+// Design B Stage 4d: fsn actions injected into Neurite's native right-click menu.
+// customcontextmenu.js calls window.fsnMenuActions for the canvas/background and
+// window.fsnNodeMenuActions for a bloomed file-node.
+function fsnRecenterPan() { const G = globalThis.Graph; if (G && G.pan) { G.pan.x = 0; G.pan.y = 0; } }
+
+/** Right-click the fsn landscape: Open(bloom)/Copy-path for a file under the cursor, Descend for a
+ *  floor, Ascend when not at the root. Prepended to the menu; returns true if it added any item. */
+export function fsnMenuActions(menu, x, y) {
+  const h = fsnHandle();
+  if (!h) return false;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const px = x * dpr, py = y * dpr;
+  let added = false;
+  const fileJson = h.pick_file_at ? h.pick_file_at(px, py) : '';
+  if (fileJson) {
+    let f = null; try { f = JSON.parse(fileJson); } catch (e) {}
+    if (f) {
+      menu.menu.append(menu.option('\u2922 Open  ' + f.name, () => fsnBloomFile(fileJson)));
+      menu.menu.append(menu.option('\u29c9 Copy path', () => { if (navigator.clipboard) navigator.clipboard.writeText(f.path || ''); }));
+      added = true;
+    }
+  } else {
+    const floor = h.pick_at ? h.pick_at(px, py) : -1;
+    if (floor >= 1) {
+      menu.menu.append(menu.option('\u25bd Descend into floor', () => { if (h.descend(floor)) fsnRecenterPan(); }));
+      added = true;
+    }
+  }
+  const cur = h.current_path ? h.current_path() : '';
+  if (cur && cur.indexOf('/') !== -1) {
+    menu.menu.append(menu.option('\u25b3 Ascend to parent', () => { h.ascend(); fsnRecenterPan(); }));
+    added = true;
+  }
+  return added;
+}
+
+/** Right-click a bloomed file-node: fsn items atop Neurite's node menu. */
+export function fsnNodeMenuActions(menu, node) {
+  if (!node) return false;
+  menu.menu.append(menu.option('\u2922 Fullscreen / exit', () => fsnToggleNodeFullscreen(node)));
+  return true;
+}
+
 export function fsnBloomFile(fileJson) {
   if (!fsn || typeof globalThis.createTextNodeWithPosAndScale !== 'function') return null;
   let f; try { f = JSON.parse(fileJson); } catch { return null; }
@@ -235,6 +278,7 @@ export function fsnBloomFile(fileJson) {
   const node = globalThis.createTextNodeWithPosAndScale(f.name, content, scale, z.x, z.y);
   if (node && node.draw) node.draw();
   if (node) {
+    node.isFsnBloom = true; // tag so the right-click menu offers fsn node actions
     bloomWires.push({ node, fx: f.x, fy: f.y, fz: f.z }); // keep it wired to the tower (fsnStep)
     if (node.content) node.content.addEventListener('dblclick', (ev) => {
       ev.stopPropagation(); fsnToggleNodeFullscreen(node); // easy full-screen / exit toggle

@@ -303,6 +303,8 @@ class PageLoad {
         for (const src of PageLoad.scripts) await this.loadScript(src); // sequentially
         Graph = new Graph();
         window.Graph = Graph; // Design B: expose the live Graph instance so the
+        window.Autopilot = Autopilot;        // Design B: fsn fullscreen fly-in/out (const in global-lexical scope)
+        window.NeuriteAnimation = Animation; // Neurite's Animation class (window.Animation is the DOM built-in!)
         // fsn substrate render loop (fsnDriveView) can slave fsn to Graph.pan/zoom.
         App = new App();
         App.init();

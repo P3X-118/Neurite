@@ -21,6 +21,23 @@ export class FsnEmbed {
         wasm.__wbg_fsnembed_free(ptr, 0);
     }
     /**
+     * Go up one level — re-root onto the parent of the current tower. Returns the new
+     * root path, or "" if already at the root.
+     * @returns {string}
+     */
+    ascend() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.fsnembed_ascend(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Create the renderer on a host-provided canvas. Async (GPU init); returns
      * a `Promise<FsnEmbed>` to JS. For now it loads the built-in demo tree; a
      * later `load_manifest(json)` will let the host supply the tree.
@@ -44,6 +61,44 @@ export class FsnEmbed {
     static create_live(canvas) {
         const ret = wasm.fsnembed_create_live(canvas);
         return ret;
+    }
+    /**
+     * Path of the directory currently rendered as the tower — for the host's
+     * view-synced left navigator.
+     * @returns {string}
+     */
+    current_path() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.fsnembed_current_path(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Descend into floor `i` of the current tower — floor 0 is the current directory
+     * (no-op; use `ascend`), floor i>=1 is its (i-1)th subfolder. Re-roots the scene
+     * onto that subfolder. Returns the new root path, or "" if it can't be entered
+     * (out of range, or a LOCKED inception boundary — those load as a separate incepted
+     * section, Stage 4). The camera is Neurite-driven, so the host frames the new tower.
+     * @param {number} i
+     * @returns {string}
+     */
+    descend(i) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.fsnembed_descend(this.__wbg_ptr, i);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * Fly the camera to pedestal `i` (the fsn descend animation).
@@ -92,6 +147,17 @@ export class FsnEmbed {
             wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         }
         return v1;
+    }
+    /**
+     * Pick the floor/pedestal under a pixel. Returns its pedestal index, or -1 if a
+     * file or nothing was hit. The host descends on a floor click.
+     * @param {number} sx
+     * @param {number} sy
+     * @returns {number}
+     */
+    pick_at(sx, sy) {
+        const ret = wasm.fsnembed_pick_at(this.__wbg_ptr, sx, sy);
+        return ret;
     }
     /**
      * World → screen pixels. Returns `[sx, sy]`, or `undefined` if the point is

@@ -302,10 +302,11 @@ export function fsnEnterConstruct(label) {
   // pull the docs out of their hierarchy: freeze them on a ring around the view center
   const zmag = Math.hypot(G.zoom.x, G.zoom.y) || 1;
   const R = zmag * (0.6 + 0.14 * nodes.length);
+  const cx = G.pan.x, cy = G.pan.y + R * 0.35; // shift the ring down so the top node clears the banner
   nodes.forEach((n, i) => {
     const a = (i / nodes.length) * Math.PI * 2 - Math.PI / 2;
-    n.pos.x = G.pan.x + Math.cos(a) * R;
-    n.pos.y = G.pan.y + Math.sin(a) * R;
+    n.pos.x = cx + Math.cos(a) * R;
+    n.pos.y = cy + Math.sin(a) * R;
     n.anchor = n.pos.scale(1); // clone (vec2 is global-lexical, not on window)
     n.anchorForce = 1;         // freeze here (updatePosition zeros vel/force when anchored)
     if (n.draw) n.draw();

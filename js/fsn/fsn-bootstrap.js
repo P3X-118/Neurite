@@ -56,6 +56,7 @@ export async function bootFsnSubstrate() {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     fsnDriveView(); // Design B: fsn camera tracks Graph.pan/zoom
+    autoDescend();  // zoom-threshold descent (continuous infinite-zoom into the structure)
     fsnStep(dt);
     requestAnimationFrame(loop);
   };
@@ -80,6 +81,19 @@ export async function bootFsnSubstrate() {
   // subfolder; Backspace ascends. Camera is Graph-driven, so recenter pan on the new
   // tower (which build_level always places at the origin). fly-by-wire framing.
   const recenter = () => { const G = globalThis.Graph; if (G && G.pan) { G.pan.x = 0; G.pan.y = 0; } };
+  // Zoom-threshold AUTO-descend: wheel-zoom TOWARD a floor (Neurite zooms at the cursor)
+  // past DESCEND_ZOOM re-roots the tower onto it, then rebases zoom to the new tower's
+  // overview so you can keep zooming down — a continuous, stepped infinite-zoom descent.
+  // (Seamless re-basing is Stage 5; this is the stepped version.)
+  let curX = innerWidth / 2, curY = innerHeight / 2;
+  addEventListener('pointermove', (e) => { curX = e.clientX; curY = e.clientY; });
+  const DESCEND_ZOOM = 0.3;
+  const autoDescend = () => {
+    const G = globalThis.Graph;
+    if (!G || !G.zoom || Math.hypot(G.zoom.x, G.zoom.y) > DESCEND_ZOOM) return;
+    const path = fsnDescendAt(curX, curY, dpr);
+    if (path) { G.pan.x = 0; G.pan.y = 0; G.zoom.x = 1; G.zoom.y = 0; console.log('[fsn] zoom-descend ->', path); }
+  };
   let dX = 0, dY = 0, dT = 0;
   addEventListener('pointerdown', (e) => { if (e.button === 0) { dX = e.clientX; dY = e.clientY; dT = performance.now(); } });
   addEventListener('pointerup', (e) => {

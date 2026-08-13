@@ -7,7 +7,7 @@
 // this file gets the fsn landscape drawing so those edits have something to ride on.
 
 import {
-  isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnOrbit, fsnZoom, fsnResize,
+  isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 
@@ -54,22 +54,25 @@ export async function bootFsnSubstrate() {
   const loop = (now) => {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
+    fsnDriveView(); // Design B: fsn camera tracks Graph.pan/zoom
     fsnStep(dt);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 
-  // Route drag/wheel to fsn's orbit camera (until Neurite's own camera input is
-  // rewired per the README).
-  let dragging = false, lx = 0, ly = 0;
-  addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; ly = e.clientY; });
+  // Design B: Neurite owns left-drag (pan) + wheel (infinite zoom) — they mutate
+  // Graph.pan/zoom, and fsn's camera tracks them via fsnDriveView() in the loop.
+  // fsn's own orbit (rotate the current structure) rides RIGHT-drag so it can't
+  // fight Neurite's pan.
+  let orbiting = false, lx = 0, ly = 0;
+  addEventListener('pointerdown', (e) => { if (e.button === 2) { orbiting = true; lx = e.clientX; ly = e.clientY; } });
   addEventListener('pointermove', (e) => {
-    if (!dragging) return;
+    if (!orbiting) return;
     fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
     lx = e.clientX; ly = e.clientY;
   });
-  addEventListener('pointerup', () => { dragging = false; });
-  addEventListener('wheel', (e) => fsnZoom(-e.deltaY * 0.01), { passive: true });
+  addEventListener('pointerup', () => { orbiting = false; });
+  addEventListener('contextmenu', (e) => { if (orbiting) e.preventDefault(); });
   addEventListener('resize', () => { sizeBuffer(); fsnResize(canvas.width, canvas.height); });
 
   console.log('[fsn] substrate active — landscape mounted behind the node layer');

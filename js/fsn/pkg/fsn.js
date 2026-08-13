@@ -125,6 +125,19 @@ export class FsnEmbed {
         wasm.fsnembed_resize(this.__wbg_ptr, width, height);
     }
     /**
+     * Design B: slave fsn's camera to Neurite's `Graph.pan`/`Graph.zoom` so the 3D
+     * landscape is the DRIVEN visual skin (Neurite owns coordinates + infinite zoom).
+     * `center_x`/`center_z` = `Graph.pan` already scaled to fsn world; `scale` =
+     * `|Graph.zoom|`. Call once per frame from the host's render loop instead of
+     * forwarding raw orbit/zoom. fsn orbit (yaw/pitch) still composes on top.
+     * @param {number} center_x
+     * @param {number} center_z
+     * @param {number} scale
+     */
+    set_view(center_x, center_z, scale) {
+        wasm.fsnembed_set_view(this.__wbg_ptr, center_x, center_z, scale);
+    }
+    /**
      * Screen pixels → world on the ground plane. Returns `[x, y, z]`, or
      * `undefined`. (Neurite `xyToZ`/`vecToZ` — node create/drag/pick.)
      * @param {number} sx

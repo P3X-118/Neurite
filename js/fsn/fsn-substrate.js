@@ -102,7 +102,17 @@ export function fsnStep(dt) {
   fsn.render();
 }
 
-/** Feed Neurite's pan/zoom input to fsn's orbit camera. */
+/** Design B: each frame, slave fsn's camera to Neurite's Graph.pan/zoom so the 3D
+ * landscape is the DRIVEN visual skin. Neurite owns coordinates + the infinite zoom. */
+export function fsnDriveView() {
+  if (!fsn || !fsn.set_view) return;
+  const G = globalThis.Graph;
+  if (!G || !G.pan || !G.zoom) return;
+  const scale = Math.hypot(G.zoom.x, G.zoom.y); // |Graph.zoom|
+  fsn.set_view(G.pan.x * WORLD_SCALE, G.pan.y * WORLD_SCALE, scale);
+}
+
+/** fsn's own orbit (rotate the tower) — Design B rides this on RIGHT-drag. */
 export function fsnOrbit(dx, dy) {
   if (fsn) fsn.orbit(dx, dy);
 }

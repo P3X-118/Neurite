@@ -169,11 +169,7 @@ class Graph {
         if (elem) return this[elem.dataset.viewType][elem.dataset.viewId];
     }
     xyToZ(x, y){
-        // fsn substrate: screen px -> world on the fsn ground plane. Gated.
-        if (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive()) {
-            const w = window.fsnXyToZ(x, y);
-            return new vec2(w.x, w.y);
-        }
+        // Design B: always z-space (Neurite owns coordinates).
         Svg.updateScaleAndOffset();
         return new vec2(
             ((x - Svg.offset.x) / Svg.scale - .5) * 2,

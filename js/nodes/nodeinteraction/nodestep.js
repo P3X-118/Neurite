@@ -167,7 +167,7 @@ class NodeSimulation {
         }
         const dt = this.updateFPS(time);
         if (fsn) {
-            this.updateNodes(dt); // fsn positions nodes; edges/regen are fractal-era, skipped
+            this.updateNodes(dt).updateEdges(dt); // Design B: graph edges run; fractal regen off
         } else {
             this.updateNodes(dt).updateEdges(dt).updateRegen();
         }

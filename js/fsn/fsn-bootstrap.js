@@ -8,14 +8,14 @@
 
 import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
-  fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle,
+  fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle, fsnPickFileAt, fsnBloomFile,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 
 // Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
 // scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
 // Attached unconditionally (cheap; they no-op/return null until fsn is ready).
-Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ, fsnHandle, fsnDescendAt, fsnAscend, fsnCurrentPath });
+Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ, fsnHandle, fsnDescendAt, fsnAscend, fsnCurrentPath, fsnPickFileAt, fsnBloomFile });
 
 // IRIX frame: stamp `html.irix` when fsn is the substrate so the scoped IRIX
 // theme stylesheet (js/fsn/irix.css) cleanly takes over Neurite's chrome —
@@ -85,7 +85,9 @@ export async function bootFsnSubstrate() {
   // (subfolder) → re-roots the tower onto it. (File double-click → the bloom, Stage 4b.)
   addEventListener('dblclick', (e) => {
     const path = fsnDescendAt(e.clientX, e.clientY, dpr);
-    if (path) { recenter(); console.log('[fsn] descended ->', path); }
+    if (path) { recenter(); console.log('[fsn] descended ->', path); return; }
+    const fileJson = fsnPickFileAt(e.clientX, e.clientY, dpr);
+    if (fileJson) { fsnBloomFile(fileJson); console.log('[fsn] bloomed', fileJson); }
   });
   addEventListener('keydown', (e) => {
     if (e.key === 'Backspace' && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {

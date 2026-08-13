@@ -135,6 +135,35 @@ export function fsnDescendAt(px, py, dpr = 1) {
 export function fsnAscend() { return fsn && fsn.ascend ? fsn.ascend() : ''; }
 export function fsnCurrentPath() { return fsn && fsn.current_path ? fsn.current_path() : ''; }
 
+/** Pick the FILE under a pixel — JSON {name,path,source,x,y,z} (world anchor) or "". */
+export function fsnPickFileAt(px, py, dpr = 1) {
+  return fsn && fsn.pick_file_at ? fsn.pick_file_at(px * dpr, py * dpr) : '';
+}
+
+/** Design B Stage 4b: bloom a file into a floating Neurite node, placed beside the file
+ * (project its world anchor to screen, offset, unproject to z-space). Returns the node. */
+export function fsnBloomFile(fileJson) {
+  if (!fsn || typeof globalThis.createTextNodeWithPosAndScale !== 'function') return null;
+  let f; try { f = JSON.parse(fileJson); } catch { return null; }
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const c = document.getElementById('fsn-canvas');
+  const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
+  const sp = fsn.project(f.x, f.y, f.z); // [sx,sy] physical px, or undefined (behind camera)
+  let z;
+  if (sp) {
+    z = fsnXyToZ(sp[0] * rx + 240, sp[1] * ry - 130, dpr); // float up-right of the file
+  } else {
+    z = { x: f.x / 12 + 2, y: f.z / 12 };
+  }
+  const G = globalThis.Graph;
+  const scale = (G && G.zoom) ? Math.sqrt(Math.hypot(G.zoom.x, G.zoom.y)) * 0.5 : 0.5;
+  const content = '# ' + f.name + '\n\n`' + (f.path || '') + '`\n\n_(content loads from FileBrowser at the jp deploy; placeholder at hal)_';
+  const node = globalThis.createTextNodeWithPosAndScale(f.name, content, scale, z.x, z.y);
+  if (node && node.draw) node.draw();
+  // TODO Stage 4b step 4: wire node -> its tower (drops in construct space, Stage 7).
+  return node;
+}
+
 function fsnBufferSize() {
   const c = document.getElementById('fsn-canvas');
   return c ? [c.width, c.height] : [globalThis.innerWidth, globalThis.innerHeight];

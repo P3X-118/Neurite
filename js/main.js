@@ -302,6 +302,8 @@ class PageLoad {
         await this.loadTabs(PageLoad.tabs); // in parallel
         for (const src of PageLoad.scripts) await this.loadScript(src); // sequentially
         Graph = new Graph();
+        window.Graph = Graph; // Design B: expose the live Graph instance so the
+        // fsn substrate render loop (fsnDriveView) can slave fsn to Graph.pan/zoom.
         App = new App();
         App.init();
     }

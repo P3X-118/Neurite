@@ -160,6 +160,27 @@ export class FsnEmbed {
         return ret;
     }
     /**
+     * Pick the FILE under a pixel. Returns JSON `{name,path,source,x,y,z}` — its identity
+     * plus the file box's world CENTER (the wire anchor for the bloomed node), or "" if a
+     * floor / nothing was hit. The host double-click blooms a floating Neurite node for the
+     * file, wired back to this tower position.
+     * @param {number} sx
+     * @param {number} sy
+     * @returns {string}
+     */
+    pick_file_at(sx, sy) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.fsnembed_pick_file_at(this.__wbg_ptr, sx, sy);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * World → screen pixels. Returns `[sx, sy]`, or `undefined` if the point is
      * behind the camera. (Neurite `fromZtoUV`/`fromZ` — the node placement seam.)
      * @param {number} x
@@ -1938,17 +1959,17 @@ function __wbg_get_imports() {
             arg0.writeTexture(arg1, arg2, arg3, arg4);
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1183, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1196, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h19848e4fc87cb18a);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2338, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2351, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h671b2dbc752d25be);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1183, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1196, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h19848e4fc87cb18a_2);
             return ret;
         },

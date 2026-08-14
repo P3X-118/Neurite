@@ -68,3 +68,8 @@ html.fsn-construct body::before {
 }
 #fsn-construct-exit:hover { background: rgba(95,230,208,.26); }
 @keyframes fsn-cx-pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+
+/* Stage 6 console: hide Neurite native chrome while fsn is the substrate.
+   #dropdowndiv is the main Neurite menu — the "confusing UX menu" of the
+   2026-08-14 regression. Node windows/modals/context menu stay (the engine). */
+html.irix #dropdowndiv { display: none !important; }

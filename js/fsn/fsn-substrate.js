@@ -43,11 +43,25 @@ export function isFractalActive() {
   return fsnVizMode() === 'fractal';
 }
 
-/** One-time init: bind fsn to a canvas layered under Neurite's #nodes overlay. */
-export async function initFsnSubstrate(canvas) {
+/** One-time init: bind fsn to a canvas layered under Neurite's #nodes overlay.
+ * `console: true` boots the fsn CONSOLE composition — the standalone shell
+ * (side-panel tree / boards / labels / reader via the real Rust web_ui) driving
+ * this embed; the console markup must already be in the DOM (mountFsnConsole). */
+export async function initFsnSubstrate(canvas, { console: consoleMode = false } = {}) {
   await init(wasmUrl);
-  fsn = await FsnEmbed.create_live(canvas);
+  fsn = consoleMode ? await FsnEmbed.create_console(canvas) : await FsnEmbed.create_live(canvas);
   return fsn;
+}
+
+// --- console composition: the panel's camera requests, host-side ---
+/** Pedestal the panel asked to fly to since last poll (-1 none). */
+export function fsnTakeFocus() { return fsn && fsn.take_focus ? fsn.take_focus() : -1; }
+/** True once after a board switch — recenter to the overview. */
+export function fsnTakeRecenter() { return fsn && fsn.take_recenter ? !!fsn.take_recenter() : false; }
+/** Graph.pan target that centers pedestal `i` (fsn world → z-space). */
+export function fsnPedestalPan(i) {
+  const a = fsn && fsn.pedestal_anchor ? fsn.pedestal_anchor(i) : null;
+  return a ? { x: a[0] / WORLD_SCALE, y: a[2] / WORLD_SCALE } : null;
 }
 
 export function fsnHandle() {

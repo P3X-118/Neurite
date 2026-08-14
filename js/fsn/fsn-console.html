@@ -1,0 +1,83 @@
+    <button id="panel-toggle" type="button" aria-label="toggle navigator panel">☰</button>
+    <aside id="tree">
+      <div class="title">File System Navigator</div>
+      <div id="session-info">◇ …</div>
+      <div class="title">Boards</div>
+      <div id="board-rows"></div>
+      <div id="tree-rows"></div>
+      <div id="links-title">Links<button id="personal-btn" type="button">◇ personal</button></div>
+      <div class="tor-addrow" style="padding: 6px 8px">
+        <input id="link-url" type="text" placeholder="https://… save + archive" spellcheck="false" />
+        <button id="link-add" type="button">save</button>
+      </div>
+      <div id="link-status"></div>
+      <div id="links-rows"></div>
+      <div id="ask-title" style="border-top: 1px solid #094">Ask · pod RAG</div>
+      <div class="tor-addrow" style="padding: 6px 8px">
+        <input id="ask-input" type="text" placeholder="ask this pod's knowledge…" spellcheck="false" />
+        <button id="ask-btn" type="button">ask</button>
+      </div>
+      <section id="status">
+        <div class="title">Status</div>
+        <div id="status-banner" class="hidden">⚠ DEMO TREE — backend unreachable</div>
+        <div id="status-rows"></div>
+      </section>
+      <section id="ephem" class="hidden">
+        <div class="eh">⤓ Ephemeral · by reference<button id="ephem-clear" type="button">✕ clear</button></div>
+        <div id="ephem-rows"></div>
+        <div class="ef">by reference · not duplicated or shared · clears on board exit</div>
+      </section>
+      <section id="transfers">
+        <div class="title">Transfers</div>
+        <div class="tor-actions">
+          <button id="tor-seed" type="button">⇅ seed focused dir</button>
+          <div class="tor-addrow">
+            <input id="tor-magnet" type="text" placeholder="magnet:?xt=…" spellcheck="false" />
+            <button id="tor-add" type="button">add</button>
+          </div>
+        </div>
+        <div id="tor-status"></div>
+        <div id="tor-list"><div class="tor-empty">no transfers</div></div>
+      </section>
+    </aside>
+    <div id="labels"></div>
+    <div id="reader" class="hidden">
+      <div class="reader-bar">
+        <span id="reader-url" class="reader-url"></span>
+        <span id="reader-formats" class="hidden">
+          <button data-fmt="archive" type="button" class="on">html</button>
+          <button data-fmt="image" type="button">shot</button>
+          <button data-fmt="pdf" type="button">pdf</button>
+        </span>
+        <button id="reader-bring" class="hidden" type="button">⤓ bring sources</button>
+        <span class="reader-badge">Linkwarden · Archive</span>
+        <button id="reader-close" type="button">✕</button>
+      </div>
+      <iframe id="reader-frame" sandbox="allow-same-origin"></iframe>
+    </div>
+    <div id="ctxmenu" class="hidden">
+      <button data-act="fly" type="button">▸ Fly to</button>
+      <button data-act="bring" type="button">⤓ Bring here</button>
+      <button data-act="tag" type="button">⌗ Tag…</button>
+      <button data-act="ask" type="button">⌁ Ask agent</button>
+      <button data-act="reader" type="button">◱ Open archive</button>
+      <button data-act="copy" type="button">⧉ Copy path</button>
+      <button data-act="props" type="button">ⓘ Properties</button>
+    </div>
+    <div id="hint">drag: orbit · wheel: zoom · click dir / panel: fly · esc: overview · ctrl+m: maximize window</div>
+    <button id="session-btn" type="button">sign in</button>
+    <div id="login">
+      <div class="box">
+        <button id="login-close" type="button" aria-label="close">×</button>
+        <h1>jp.cooey.club</h1>
+        <p>Sign in to unlock your home &amp; community files. (Public data needs no login.)</p>
+        <!-- SSO first when the backend advertises OIDC (revealed by feature-detect);
+             the password form stays for dev / service accounts. -->
+        <button id="login-sso" class="hidden" type="button">Sign in with cooey.club SSO</button>
+        <div id="login-sso-sep" class="hidden">— or —</div>
+        <input id="login-user" type="text" placeholder="username" autocomplete="username" spellcheck="false" />
+        <input id="login-pass" type="password" placeholder="password" autocomplete="current-password" />
+        <button id="login-submit" type="button">Enter</button>
+        <div id="login-status"></div>
+      </div>
+    </div>

@@ -1,0 +1,796 @@
+/* fsn console CSS — EXTRACTED from ~/apps/IRIX/index.html <style> (the standalone
+   shell). Keep in sync with that file; only the two global selectors are rescoped
+   (html/body -> html.irix, canvas -> #fsn-canvas) for the Neurite host page. */
+      /* SGI-terminal aesthetic: fill the viewport, dark teal void, no scrollbars. */
+      /* Scoped for the Neurite host page: html.irix is stamped when the fsn
+         substrate is active (fsn-bootstrap); #fsn-canvas is fsn's own canvas. */
+      html.irix, html.irix body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #071a1a;
+        font-family: "Courier New", monospace;
+      }
+      #fsn-canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        outline: none;
+        touch-action: none;
+      }
+
+      /* Left file-tree panel — the 2D navigator fsn showed beside the 3D view. */
+      #tree {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 248px;
+        height: 100vh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        background: rgba(4, 22, 28, 0.86);
+        border-right: 1px solid #0bd6c2;
+        color: #7ff0e0;
+        font-size: 12px;
+        line-height: 1.55;
+        z-index: 10;
+        user-select: none;
+      }
+      #session-info {
+        padding: 6px 12px;
+        font-size: 11px;
+        color: #6cd;
+        border-bottom: 1px solid #063;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #tree-rows {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        min-height: 30%;
+      }
+      #tree .row.locked {
+        color: #a67;
+        opacity: 0.75;
+        font-style: italic;
+      }
+      #tree .row.locked .glyph {
+        color: #c58;
+      }
+      /* File-name chips — shown for the FOCUSED pedestal's columns only. */
+      #labels .label.file {
+        font-size: 9px;
+        padding: 1px 5px;
+        color: #a8d8ce;
+        background: rgba(4, 22, 28, 0.78);
+        border-color: rgba(11, 214, 194, 0.35);
+      }
+      #labels .label.locked {
+        color: #d9a;
+        opacity: 0.85;
+        text-shadow: 0 0 4px #a35, 0 1px 2px #000;
+      }
+      #tree .title {
+        padding: 10px 12px;
+        color: #0ff;
+        letter-spacing: 1px;
+        border-bottom: 1px solid #094;
+        text-transform: uppercase;
+        font-size: 11px;
+      }
+      #tree .row {
+        padding: 4px 10px;
+        cursor: pointer;
+        white-space: nowrap;
+        border-left: 3px solid transparent;
+      }
+      #tree .row:hover {
+        background: rgba(20, 130, 140, 0.35);
+      }
+      #tree .row.active {
+        background: rgba(0, 190, 160, 0.85);
+        color: #011;
+        border-left-color: #0ff;
+      }
+      #tree .row .glyph {
+        color: #0bd6c2;
+        margin-right: 4px;
+      }
+      /* Filesystem tag chips on tree rows (the cross-cutting metadata layer). */
+      #tree .row .chips {
+        margin-left: 6px;
+      }
+      #tree .row .tag-chip {
+        font-size: 9px;
+        padding: 0 4px;
+        margin: 0 3px 0 0;
+      }
+      /* Files — click opens the content in the reader viewport. */
+      #tree .row.file {
+        color: #9ccbb8;
+        font-size: 11.5px;
+      }
+      #tree .row.file .glyph {
+        color: #58a08a;
+      }
+      /* Sovereign unit pod — amber, dashed (federated by reference over the mesh). */
+      #tree .row.private {
+        color: #e7cf97;
+      }
+      #tree .row.private .glyph {
+        color: #ffd67e;
+      }
+      #labels .label.private {
+        color: #ffd67e;
+        text-shadow: 0 0 4px #7a5c1a, 0 1px 2px #000;
+      }
+      /* Boards — top-level view-space selector (option A: board → pods). */
+      #board-rows {
+        flex: 0 0 auto;
+        max-height: 26%;
+        overflow-y: auto;
+        border-bottom: 1px solid #063;
+      }
+      #tree .board-row {
+        padding: 5px 10px;
+        cursor: pointer;
+        white-space: nowrap;
+        border-left: 3px solid transparent;
+      }
+      #tree .board-row:hover {
+        background: rgba(20, 130, 140, 0.35);
+      }
+      #tree .board-row.active {
+        background: rgba(0, 190, 160, 0.85);
+        color: #011;
+        border-left-color: #0ff;
+      }
+      #tree .board-row .glyph {
+        color: #0bd6c2;
+        margin-right: 5px;
+      }
+      #tree .board-row .bpath {
+        color: #4aa;
+        font-size: 10px;
+        margin-left: 6px;
+      }
+      /* Reader — the Linkwarden archived-copy window (overlay iframe). */
+      #reader {
+        position: fixed;
+        top: 4%;
+        right: 3%;
+        width: min(46vw, 640px);
+        height: 88vh;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        background: rgba(4, 20, 25, 0.97);
+        border: 1px solid #0bd6c2;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 24px rgba(11, 214, 194, 0.18);
+      }
+      #reader.hidden { display: none; }
+      /* Ctrl+M — maximize the focused window to the full browser tab. */
+      #reader.maximized {
+        top: 0;
+        right: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      #reader .reader-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-bottom: 1px solid #094;
+        background: linear-gradient(180deg, rgba(11, 214, 194, 0.1), transparent);
+      }
+      #reader .reader-url {
+        font-size: 11px;
+        color: #bfe0da;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1 1 auto;
+      }
+      #reader .reader-badge {
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #ffd67e;
+        border: 1px solid rgba(255, 214, 126, 0.5);
+        padding: 2px 6px;
+        flex: 0 0 auto;
+      }
+      #reader-close {
+        background: none;
+        border: 1px solid #0bd6c2;
+        color: #0bd6c2;
+        cursor: pointer;
+        width: 24px;
+        height: 24px;
+        line-height: 1;
+        flex: 0 0 auto;
+      }
+      #reader-formats {
+        display: inline-flex;
+        gap: 2px;
+        flex: 0 0 auto;
+      }
+      #reader-formats.hidden { display: none; }
+      #reader-formats button {
+        background: none;
+        border: 1px solid rgba(11, 214, 194, 0.4);
+        color: #6fa49c;
+        cursor: pointer;
+        font: inherit;
+        font-size: 10px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        padding: 2px 7px;
+      }
+      #reader-formats button.on {
+        color: #0ff;
+        border-color: #0bd6c2;
+        background: rgba(11, 214, 194, 0.15);
+      }
+      #reader-frame {
+        flex: 1 1 auto;
+        border: 0;
+        width: 100%;
+        background: #fff;
+      }
+      /* Right-click filesystem context menu. */
+      #ctxmenu {
+        position: fixed;
+        z-index: 60;
+        min-width: 168px;
+        background: rgba(4, 20, 25, 0.98);
+        border: 1px solid #0bd6c2;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        padding: 4px;
+      }
+      #ctxmenu.hidden { display: none; }
+      #ctxmenu button {
+        background: none;
+        border: 0;
+        color: #7ff0e0;
+        text-align: left;
+        padding: 7px 12px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+      }
+      #ctxmenu button:hover {
+        background: rgba(11, 214, 194, 0.18);
+        color: #0ff;
+      }
+
+      /* Links — Linkwarden archives with tag chips + the personal-view toggle. */
+      #links-title,
+      #ask-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        color: #0ff;
+        letter-spacing: 1px;
+        border-bottom: 1px solid #094;
+        border-top: 1px solid #094;
+        text-transform: uppercase;
+        font-size: 11px;
+      }
+      #personal-btn {
+        background: none;
+        border: 1px solid #555;
+        color: #7a8;
+        font: inherit;
+        font-size: 10px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      #personal-btn.on {
+        border-color: #ffd67e;
+        color: #ffd67e;
+        background: rgba(255, 214, 126, 0.1);
+      }
+      #links-rows {
+        flex: 0 0 auto;
+        max-height: 24%;
+        overflow-y: auto;
+      }
+      .link-row {
+        padding: 5px 10px;
+        cursor: pointer;
+        border-left: 3px solid transparent;
+      }
+      .link-row:hover {
+        background: rgba(20, 130, 140, 0.35);
+      }
+      .link-row.mine {
+        border-left-color: #ffd67e;
+        background: rgba(255, 214, 126, 0.08);
+      }
+      .link-row .lname {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tag-chip {
+        display: inline-block;
+        font-size: 9.5px;
+        color: #0bd6c2;
+        border: 1px solid #0bd6c2;
+        padding: 0 5px;
+        margin: 2px 4px 0 0;
+      }
+      #link-status {
+        padding: 0 12px 4px;
+        font-size: 10px;
+        color: #6fa49c;
+        min-height: 0;
+      }
+      /* A saved link before the worker has captured it. */
+      .link-row .lstate {
+        font-size: 9px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: #c9a23f;
+        margin-left: 6px;
+      }
+      .link-row .lstate.failed { color: #c98079; }
+      .tag-chip.priv {
+        color: #ffd67e;
+        border-color: #ffd67e;
+        border-style: dashed;
+      }
+
+      /* Ephemeral correlation set — files brought here BY REFERENCE (admin-private,
+         never duplicated/shared, clears on board exit). Dashed amber = ephemeral. */
+      #ephem {
+        border-top: 1px dashed #ffd67e;
+        background: rgba(255, 214, 126, 0.05);
+      }
+      #ephem.hidden { display: none; }
+      #ephem .eh {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        color: #ffd67e;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        font-size: 10px;
+      }
+      #ephem-clear {
+        background: none;
+        border: 1px dashed rgba(255, 214, 126, 0.5);
+        color: #ffd67e;
+        font: inherit;
+        font-size: 10px;
+        padding: 2px 7px;
+        cursor: pointer;
+      }
+      .ephem-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+        color: #e7cf97;
+        font-size: 11.5px;
+        border-left: 3px solid transparent;
+      }
+      .ephem-row:hover {
+        background: rgba(255, 214, 126, 0.12);
+        border-left-color: #ffd67e;
+      }
+      .ephem-row .glyph { color: #ffd67e; }
+      .ephem-row .lbl {
+        flex: 1 1 auto;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ephem-row .rm {
+        background: none;
+        border: 0;
+        color: rgba(255, 214, 126, 0.6);
+        cursor: pointer;
+        font: inherit;
+      }
+      #ephem .ef {
+        padding: 3px 12px 8px;
+        font-size: 9px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: rgba(255, 214, 126, 0.55);
+      }
+      #reader-bring {
+        background: none;
+        border: 1px dashed rgba(255, 214, 126, 0.6);
+        color: #ffd67e;
+        cursor: pointer;
+        font: inherit;
+        font-size: 10px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        flex: 0 0 auto;
+      }
+      #reader-bring.hidden { display: none; }
+
+      /* Status — honest subsystem state; failures are VISIBLE, never silent. */
+      #status .title {
+        border-top: 1px solid #094;
+      }
+      #status-banner {
+        margin: 6px 10px;
+        padding: 5px 8px;
+        font-size: 10.5px;
+        letter-spacing: 0.5px;
+        color: #ffb4ab;
+        border: 1px dashed #a3453d;
+        background: rgba(226, 86, 77, 0.1);
+      }
+      #status-banner.hidden { display: none; }
+      #status-rows {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px 10px;
+        padding: 4px 12px 8px;
+      }
+      .st {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: #6fa49c;
+      }
+      .st .d {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #555;
+      }
+      .st.ok .d { background: #0bd6c2; box-shadow: 0 0 5px #0bd6c2; }
+      .st.down { color: #c98079; }
+      .st.down .d { background: #e2564d; box-shadow: 0 0 5px #e2564d; }
+
+      /* Transfers — the torrent backend console. Touch-first controls. */
+      #transfers {
+        flex: 0 1 auto;
+        max-height: 46%;
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid #0bd6c2;
+        background: rgba(3, 16, 20, 0.92);
+      }
+      #transfers .tor-actions {
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border-bottom: 1px solid #094;
+      }
+      #transfers button {
+        min-height: 44px;
+        background: rgba(11, 214, 194, 0.12);
+        border: 1px solid #0bd6c2;
+        color: #7ff0e0;
+        font-family: inherit;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+        padding: 0 12px;
+      }
+      #transfers button:active {
+        background: rgba(0, 190, 160, 0.6);
+        color: #011;
+      }
+      .tor-addrow {
+        display: flex;
+        gap: 8px;
+      }
+      .tor-addrow input {
+        flex: 1;
+        min-height: 44px;
+        box-sizing: border-box;
+        background: #031014;
+        border: 1px solid #096;
+        color: #7ff0e0;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 0 10px;
+        min-width: 0;
+      }
+      #tor-status {
+        padding: 4px 10px;
+        color: #4cc;
+        font-size: 11px;
+        min-height: 16px;
+      }
+      #tor-list {
+        overflow-y: auto;
+        padding: 4px 8px 10px;
+      }
+      #tor-list .tor {
+        padding: 8px 4px;
+        border-bottom: 1px dotted rgba(11, 214, 194, 0.25);
+      }
+      .tor-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tor-state {
+        color: #0ff;
+        font-size: 10px;
+        letter-spacing: 1px;
+        flex: 0 0 auto;
+      }
+      .tor-name {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #cfffff;
+      }
+      #tor-list .tor-copy {
+        min-height: 34px;
+        font-size: 10px;
+        padding: 0 8px;
+      }
+      .tor-bar {
+        height: 6px;
+        margin: 6px 0 4px;
+        background: rgba(11, 214, 194, 0.15);
+        border: 1px solid rgba(11, 214, 194, 0.4);
+      }
+      .tor-fill {
+        height: 100%;
+        background: #0bd6c2;
+      }
+      .tor-meta {
+        color: #4cc;
+        font-size: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tor-empty {
+        color: #367;
+        padding: 8px 4px;
+        font-size: 11px;
+      }
+
+      /* Floating directory name labels, positioned over the 3D view each frame. */
+      #labels {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+        overflow: hidden;
+      }
+      #labels .label {
+        /* Chips are PURE VISUALS — never pointer targets. A chip that captured the
+           pointer swallowed drags that began on it, so orbiting died wherever a
+           label happened to sit (a real dead zone once file chips appeared). Chip
+           taps are hit-tested inside the app's own click path instead, which
+           already tells a click from a drag. */
+        pointer-events: none;
+        position: absolute;
+        /* transform is set per-frame (translate(-50%,-100%) scale(d)) so the chip's
+           bottom-center stands ON its platform edge and scales with depth. */
+        transform-origin: 50% 100%;
+        color: #b6f5d2;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        background: rgba(4, 20, 16, 0.78);
+        border: 1px solid rgba(95, 246, 156, 0.4);
+        border-radius: 2px;
+        padding: 1px 6px;
+        text-shadow: 0 1px 2px #000;
+      }
+      #labels .label.locked {
+        border-color: rgba(255, 180, 171, 0.5);
+      }
+      #labels .label.private {
+        border-color: rgba(255, 214, 126, 0.55);
+        border-style: dashed;
+      }
+
+      #hint {
+        position: fixed;
+        right: 10px;
+        bottom: 8px;
+        z-index: 10;
+        color: #4cc;
+        font-size: 11px;
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      /* Opt-in session button (top-right). Anonymous users already see public data. */
+      #session-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 12;
+        min-height: 40px;
+        padding: 0 16px;
+        background: rgba(4, 22, 28, 0.86);
+        border: 1px solid #0bd6c2;
+        color: #7ff0e0;
+        font-family: inherit;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+      }
+      #session-btn:active {
+        background: rgba(0, 190, 160, 0.7);
+        color: #011;
+      }
+      #login .box {
+        position: relative;
+      }
+      #login-close {
+        position: absolute;
+        top: 8px;
+        right: 10px;
+        background: none;
+        border: none;
+        color: #4cc;
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+        min-height: 32px;
+        min-width: 32px;
+        padding: 0;
+      }
+
+      /* Login gate — shown until a session exists (hidden by default). */
+      #login {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        background: rgba(4, 16, 20, 0.94);
+        align-items: center;
+        justify-content: center;
+      }
+      #login .box {
+        width: min(340px, 90vw);
+        box-sizing: border-box;
+        border: 1px solid #0bd6c2;
+        background: rgba(3, 20, 26, 0.96);
+        padding: 22px;
+        color: #7ff0e0;
+      }
+      #login h1 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        letter-spacing: 2px;
+        color: #0ff;
+        text-transform: uppercase;
+      }
+      #login p {
+        margin: 0 0 16px;
+        font-size: 11px;
+        color: #4cc;
+      }
+      #login input {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 44px;
+        margin-bottom: 10px;
+        background: #031014;
+        border: 1px solid #096;
+        color: #7ff0e0;
+        font-family: inherit;
+        font-size: 13px;
+        padding: 0 12px;
+      }
+      #login button {
+        width: 100%;
+        min-height: 44px;
+        background: rgba(11, 214, 194, 0.15);
+        border: 1px solid #0bd6c2;
+        color: #7ff0e0;
+        font-family: inherit;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        cursor: pointer;
+      }
+      #login button:active {
+        background: rgba(0, 190, 160, 0.7);
+        color: #011;
+      }
+      #login-status {
+        min-height: 16px;
+        margin-top: 10px;
+        font-size: 11px;
+        color: #f86;
+      }
+      /* SSO button leads when OIDC is available; brighter than the password Enter. */
+      #login-sso {
+        background: rgba(11, 214, 194, 0.28);
+        margin-bottom: 12px;
+      }
+      #login-sso.hidden, #login-sso-sep.hidden { display: none; }
+      #login-sso-sep {
+        text-align: center;
+        color: #4cc;
+        font-size: 10px;
+        letter-spacing: 2px;
+        margin-bottom: 12px;
+      }
+
+      /* ---- Mobile (≤700px): the panel becomes an off-canvas overlay behind a ☰
+             toggle, and the reader becomes a full-screen sheet. The desktop layout
+             is untouched above the breakpoint. ---- */
+      #panel-toggle {
+        display: none;
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        z-index: 20; /* above the panel (10), below the reader (40) */
+        width: 44px;
+        height: 44px;
+        align-items: center;
+        justify-content: center;
+        background: rgba(4, 22, 28, 0.92);
+        border: 1px solid #0bd6c2;
+        color: #0bd6c2;
+        font-family: inherit;
+        font-size: 18px;
+        cursor: pointer;
+      }
+      #panel-toggle:active {
+        background: rgba(0, 190, 160, 0.7);
+        color: #011;
+      }
+      @media (max-width: 700px) {
+        #panel-toggle { display: flex; }
+        #tree {
+          width: min(84vw, 320px);
+          padding-top: 56px; /* clear the ☰ button, which stays fixed above */
+          transform: translateX(-102%);
+          transition: transform 0.22s ease;
+          box-shadow: 14px 0 40px rgba(0, 0, 0, 0.55);
+        }
+        body.panel-open #tree { transform: translateX(0); }
+        /* Full-screen sheet: the floating-window chrome has no room at phone
+           width — the bar's no-wrap children were overflowing the viewport. */
+        #reader {
+          top: 0;
+          right: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          height: 100dvh;
+        }
+        #reader .reader-bar { flex-wrap: wrap; row-gap: 6px; }
+        /* Label chips are the fly-to tap targets on a phone — pad them up. */
+        #labels .label { padding: 7px 10px; }
+        /* Touch targets. */
+        #reader-close { width: 44px; height: 44px; font-size: 16px; }
+        #reader-formats button, #reader-bring { min-height: 36px; padding: 6px 10px; }
+        #hint { display: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #tree { transition: none; }
+      }

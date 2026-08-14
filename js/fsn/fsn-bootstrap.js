@@ -10,8 +10,10 @@ import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
   fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions,
   fsnEnterConstruct, fsnExitConstruct, fsnInConstruct,
+  fsnTakeFocus, fsnTakeRecenter, fsnPedestalPan,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
+import { mountFsnConsole } from './fsn-console.js';
 
 // Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
 // scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
@@ -29,6 +31,10 @@ if (isFsnActive()) document.documentElement.classList.add('irix');
 
 export async function bootFsnSubstrate() {
   if (!isFsnActive()) return null;
+
+  // The fsn CONSOLE shell (panel/labels/reader markup + CSS + chrome script)
+  // must exist BEFORE create_console — the Rust web_ui binds to these ids.
+  await mountFsnConsole();
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const canvas = document.createElement('canvas');
@@ -48,32 +54,83 @@ export async function bootFsnSubstrate() {
   sizeBuffer();
   document.body.insertBefore(canvas, document.body.firstChild);
 
-  await initFsnSubstrate(canvas);
+  await initFsnSubstrate(canvas, { console: true });
 
   // Own render loop for the substrate (the node layer's placement is swapped
   // separately, in Node.draw — see README).
   let last = performance.now();
+  // Camera flights: the panel's fly-to (tree row / board switch / by-ref) eases
+  // the CAMERA AUTHORITY (Graph.pan/zoom) — fsn stays slaved via fsnDriveView,
+  // exactly the standalone feel (click → fly, Esc → overview) in z-space.
+  let flight = null; // { t0, dur, fp:{x,y}, tp:{x,y}, fz, tz }
+  const zoomMag = () => { const G = globalThis.Graph; return G ? Math.hypot(G.zoom.x, G.zoom.y) : 1; };
+  const flyPanTo = (tp, tzMag) => {
+    const G = globalThis.Graph;
+    if (!G || !tp) return;
+    flight = { t0: performance.now(), dur: 900, fp: { x: G.pan.x, y: G.pan.y }, tp, fz: zoomMag(), tz: tzMag };
+  };
+  const stepFlight = (now) => {
+    const G = globalThis.Graph;
+    if (!flight || !G) return;
+    let t = (now - flight.t0) / flight.dur;
+    if (t >= 1) t = 1;
+    const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; // easeInOutQuad
+    G.pan.x = flight.fp.x + (flight.tp.x - flight.fp.x) * e;
+    G.pan.y = flight.fp.y + (flight.tp.y - flight.fp.y) * e;
+    const m = flight.fz + (flight.tz - flight.fz) * e;
+    const cur = zoomMag() || 1; // rescale, preserving zoom rotation
+    G.zoom.x *= m / cur; G.zoom.y *= m / cur;
+    if (t >= 1) flight = null;
+  };
+  const flyToPedestal = (i) => { const tp = fsnPedestalPan(i); if (tp) flyPanTo(tp, 0.45); };
+  const flyOverview = () => flyPanTo({ x: 0, y: 0 }, 1.0);
   const loop = (now) => {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
+    const fi = fsnTakeFocus();          // panel fly-to → ease Graph there
+    if (fi >= 0) flyToPedestal(fi);
+    if (fsnTakeRecenter()) flyOverview(); // board switch → overview
+    stepFlight(now);
     fsnDriveView(); // Design B: fsn camera tracks Graph.pan/zoom
     fsnStep(dt);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 
-  // Design B: Neurite owns left-drag (pan) + wheel (infinite zoom) — they mutate
-  // Graph.pan/zoom, and fsn's camera tracks them via fsnDriveView() in the loop.
-  // fsn's own orbit (rotate the current structure) rides RIGHT-drag so it can't
-  // fight Neurite's pan.
-  let orbiting = false, lx = 0, ly = 0;
-  addEventListener('pointerdown', (e) => { if (e.button === 2) { orbiting = true; lx = e.clientX; ly = e.clientY; } });
+  // CONSOLE CONTROLS — standalone-app parity (the 2026-08-14 regression fix):
+  // LEFT-drag = orbit (stopPropagation so Neurite never pans on it), wheel =
+  // zoom (Neurite's infinite z-zoom), click dir = fly, Esc = overview. Right-drag
+  // also orbits (kept from Design B dev).
+  let orbiting = false, moved = 0, lx = 0, ly = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    orbiting = true; moved = 0; lx = e.clientX; ly = e.clientY;
+    flight = null;               // user input interrupts a flight
+    e.stopPropagation();         // keep Neurite's pan/node-create off left-drag
+  });
+  addEventListener('pointerdown', (e) => { if (e.button === 2) { orbiting = true; moved = 0; lx = e.clientX; ly = e.clientY; } });
   addEventListener('pointermove', (e) => {
     if (!orbiting) return;
+    moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
     fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
     lx = e.clientX; ly = e.clientY;
   });
-  addEventListener('pointerup', () => { orbiting = false; });
+  addEventListener('pointerup', (e) => {
+    if (!orbiting) return;
+    orbiting = false;
+    // a left press that never dragged is a CLICK → fly to the dir under it
+    if (e.button === 0 && moved < 6) {
+      const h = fsnHandle();
+      const i = h && h.pick_at ? h.pick_at(e.clientX * dpr, e.clientY * dpr) : -1;
+      if (i >= 0) flyToPedestal(i);
+    }
+  });
+  addEventListener('wheel', () => { flight = null; }, { passive: true });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !fsnInConstruct() && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {
+      flyOverview(); // standalone parity: Esc returns to the overview
+    }
+  });
   addEventListener('contextmenu', (e) => { if (orbiting) e.preventDefault(); });
   addEventListener('resize', () => { sizeBuffer(); fsnResize(canvas.width, canvas.height); });
 

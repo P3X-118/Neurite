@@ -9,7 +9,7 @@
 import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
   fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions,
-  fsnEnterConstruct, fsnExitConstruct, fsnInConstruct,
+  fsnEnterConstruct, fsnExitConstruct, fsnInConstruct, fsnDocCount, fsnToggleNodeFullscreen,
   fsnTakeFocus, fsnTakeRecenter, fsnPedestalPan,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
@@ -19,7 +19,7 @@ import { initMosaic, isMosaicFollower } from './fsn-mosaic.js';
 // Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
 // scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
 // Attached unconditionally (cheap; they no-op/return null until fsn is ready).
-Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ, fsnHandle, fsnDescendAt, fsnAscend, fsnCurrentPath, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions, fsnEnterConstruct, fsnExitConstruct, fsnInConstruct });
+Object.assign(globalThis, { isFsnActive, isFractalActive, fsnFromZtoUV, fsnProjectPx, fsnXyToZ, fsnHandle, fsnDescendAt, fsnAscend, fsnCurrentPath, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions, fsnEnterConstruct, fsnExitConstruct, fsnInConstruct, fsnDocCount, fsnToggleNodeFullscreen });
 
 // IRIX frame: stamp `html.irix` when fsn is the substrate so the scoped IRIX
 // theme stylesheet (js/fsn/irix.css) cleanly takes over Neurite's chrome —

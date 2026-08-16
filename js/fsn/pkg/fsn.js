@@ -224,6 +224,31 @@ export class FsnEmbed {
         return v1;
     }
     /**
+     * Raw-content URL for a file, routed by the viewer's mode (session `/api`,
+     * public share, sovereign unit) — the standalone reader's canonical routing
+     * (`backend::raw_url`), exposed so the console's floating document windows
+     * load real content through the same pipeline. Empty string = unreachable.
+     * @param {string} source
+     * @param {string} path
+     * @returns {string}
+     */
+    raw_url(source, path) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(path, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len1 = WASM_VECTOR_LEN;
+            const ret = wasm.fsnembed_raw_url(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            deferred3_0 = ret[0];
+            deferred3_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Draw one frame to the canvas. In console mode, reproject the floating
      * directory/file labels afterwards (the standalone app's per-frame call).
      */

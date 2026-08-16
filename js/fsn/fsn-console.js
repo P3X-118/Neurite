@@ -68,6 +68,12 @@ function wireChrome() {
   };
   const onCtrlM = (e) => {
     if (!e.ctrlKey || (e.key !== 'm' && e.key !== 'M')) return;
+    // a floating document window takes priority — it IS the reading surface
+    if (globalThis.fsnToggleNodeFullscreen && globalThis.fsnDocCount && globalThis.fsnDocCount() > 0) {
+      e.preventDefault();
+      globalThis.fsnToggleNodeFullscreen();
+      return;
+    }
     const reader = document.getElementById('reader');
     if (!reader || reader.classList.contains('hidden')) return;
     e.preventDefault();
@@ -78,6 +84,77 @@ function wireChrome() {
   if (frame) frame.addEventListener('load', () => {
     try { frame.contentDocument?.addEventListener('keydown', onCtrlM); } catch {}
   });
+
+  // ---- navigator motion (user-directed 2026-08-16): more screen space for
+  // documents. The whole panel retracts behind an edge tab, and tree folders
+  // expand/retract — both motion-animated, reduced-motion aware. ----
+  const tab = document.createElement('button');
+  tab.id = 'panel-collapse';
+  tab.type = 'button';
+  tab.title = 'collapse / expand the navigator (more room to read)';
+  tab.textContent = '⟨';
+  tab.addEventListener('click', () => {
+    const collapsed = document.body.classList.toggle('panel-collapsed');
+    tab.textContent = collapsed ? '⟩' : '⟨';
+  });
+  document.body.appendChild(tab);
+
+  // Folder expand/retract: rows are a FLAT list built by the Rust web_ui — the
+  // hierarchy is recovered from data-path prefixes, so the wasm stays unaware.
+  // A caret is injected per directory row; clicking it toggles the subtree
+  // (staggered fade), clicking the row body still flies. Collapsed state is
+  // remembered across panel refreshes (board switches re-render the rows).
+  const collapsedDirs = new Set();
+  const rowsBox = document.getElementById('tree-rows');
+  const keyOf = (r) => (r.dataset.source || '') + '::' + (r.dataset.path || '');
+  const isUnder = (r, src, path) =>
+    r.dataset.source === src && (r.dataset.path || '').startsWith(path.replace(/\/$/, '') + '/');
+  const applyCollapsed = () => {
+    if (!rowsBox) return;
+    const rows = [...rowsBox.children];
+    for (const r of rows) r.classList.remove('collapsed-away');
+    for (const key of collapsedDirs) {
+      const [src, path] = key.split('::');
+      for (const r of rows) if (isUnder(r, src, path)) r.classList.add('collapsed-away');
+    }
+  };
+  const decorate = () => {
+    if (!rowsBox) return;
+    const rows = [...rowsBox.children];
+    rows.forEach((r, i) => {
+      if (r.querySelector('.row-caret')) return;
+      const next = rows[i + 1];
+      const isDir = !!next && isUnder(next, r.dataset.source, r.dataset.path || '/');
+      if (!isDir) return;
+      const caret = document.createElement('button');
+      caret.type = 'button';
+      caret.className = 'row-caret';
+      caret.textContent = collapsedDirs.has(keyOf(r)) ? '▸' : '▾';
+      caret.addEventListener('click', (e) => {
+        e.stopPropagation(); // the row body still flies; the caret only folds
+        const key = keyOf(r);
+        const closing = !collapsedDirs.has(key);
+        if (closing) collapsedDirs.add(key); else collapsedDirs.delete(key);
+        caret.textContent = closing ? '▸' : '▾';
+        const kids = [...rowsBox.children].filter((k) => isUnder(k, r.dataset.source, r.dataset.path || '/'));
+        if (reduced) { applyCollapsed(); return; }
+        if (closing) {
+          kids.forEach((k, j) => animate(k, { opacity: [1, 0], x: [0, -8] }, { duration: 0.14, delay: j * 0.012 }));
+          setTimeout(applyCollapsed, 150 + kids.length * 12);
+        } else {
+          applyCollapsed();
+          const shown = kids.filter((k) => !k.classList.contains('collapsed-away'));
+          shown.forEach((k, j) => animate(k, { opacity: [0, 1], x: [-8, 0] }, { duration: 0.16, delay: j * 0.012 }));
+        }
+      });
+      r.prepend(caret);
+    });
+    applyCollapsed();
+  };
+  if (rowsBox) {
+    decorate();
+    new MutationObserver(() => decorate()).observe(rowsBox, { childList: true });
+  }
 
   // Stage 8 mosaic: "expand view" opens an auxiliary window that tiles into the
   // same landscape (hidden on followers via html.fsn-follower CSS).

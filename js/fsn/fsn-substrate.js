@@ -14,6 +14,7 @@
 // Wasm assets are vendored in ./pkg (built via `wasm-pack build --target web`).
 
 import init, { FsnEmbed } from './pkg/fsn.js';
+import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows } from './fsn-docwin.js';
 import wasmUrl from './pkg/fsn_bg.wasm?url'; // Vite: resolves to the served asset URL
 
 // Neurite world units are ~O(1) around the origin; fsn's landscape spans tens of
@@ -114,7 +115,8 @@ export function fsnStep(dt) {
   if (!fsn) return;
   fsn.update(dt);
   fsn.render();
-  fsnUpdateWires(); // Design B Stage 4b: keep bloomed-node -> tower wires attached
+  stepDocWindows(performance.now()); // ambient float on the open document windows
+  fsnUpdateWires(); // fluid tethers: document windows -> their file boxes on the towers
   if (constructActive) fsnUpdateConstructLinks(); // Stage 7: correlation links in the construct
 }
 
@@ -162,7 +164,7 @@ export function fsnPickFileAt(px, py, dpr = 1) {
 // wire is a screen-space line (own overlay SVG, not Neurite's viewBox'd svg_bg) recomputed
 // each frame from fsn.project(fileWorld) -> node center, so it tracks fsn orbit + Graph zoom.
 // Entering the tag "construct" (Stage 7) calls fsnClearWires() to drop them.
-let bloomWires = []; // { node, fx, fy, fz }
+// (bloomWires retired 2026-08-16 — tethers read the fsn-docwin registry)
 
 function fsnWiresSvg() {
   let el = document.getElementById('fsn-wires');
@@ -178,31 +180,38 @@ function fsnWiresSvg() {
 export function fsnUpdateWires() {
   if (!fsn) return;
   const wel = document.getElementById('fsn-wires');
-  if (constructActive) { if (wel) wel.style.display = 'none'; return; } // Stage 7: wires drop in the construct
+  if (constructActive) { if (wel) wel.style.display = 'none'; return; } // tethers drop in the construct
   if (wel && wel.style.display === 'none') wel.style.display = '';
-  bloomWires = bloomWires.filter(w => w.node && !w.node.removed && w.node.content && document.body.contains(w.node.content));
+  const wins = [...docWindows.values()].filter((w) => !w.maximized);
   const el = document.getElementById('fsn-wires');
-  if (bloomWires.length === 0) { if (el) el.replaceChildren(); return; }
+  if (wins.length === 0) { if (el) el.replaceChildren(); return; }
   const svg = fsnWiresSvg();
   const c = document.getElementById('fsn-canvas');
   const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
-  while (svg.children.length > bloomWires.length) svg.removeChild(svg.lastChild);
-  while (svg.children.length < bloomWires.length) {
-    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    ln.setAttribute('stroke', '#5fe6d0'); ln.setAttribute('stroke-width', '1.5');
-    ln.setAttribute('stroke-opacity', '0.65'); ln.setAttribute('stroke-dasharray', '5 4');
-    svg.appendChild(ln);
+  while (svg.children.length > wins.length) svg.removeChild(svg.lastChild);
+  while (svg.children.length < wins.length) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'fsn-tether');
+    svg.appendChild(path);
   }
-  bloomWires.forEach((w, i) => {
-    const ln = svg.children[i];
-    const p = fsn.project(w.fx, w.fy, w.fz); // file box -> physical px (or undefined: behind cam)
-    const r = w.node.content.getBoundingClientRect();
-    if (p && r.width > 0) {
-      ln.setAttribute('x1', p[0] * rx); ln.setAttribute('y1', p[1] * ry);
-      ln.setAttribute('x2', r.x + r.width / 2); ln.setAttribute('y2', r.y + r.height / 2);
-      ln.style.display = '';
+  wins.forEach((w, i) => {
+    const path = svg.children[i];
+    const a = fsn.project(w.anchor.x, w.anchor.y, w.anchor.z); // file box, physical px
+    const r = w.el.getBoundingClientRect();                    // includes the float transform
+    if (a && r.width > 0) {
+      const sx = a[0] * rx, sy = a[1] * ry;
+      // attach to the window's nearest vertical edge, at bar height
+      const ey = r.top + 16;
+      const ex = sx < r.left + r.width / 2 ? r.left : r.right;
+      // a slack cable: sag scales with distance, capped — reads organic, not stiff
+      const dist = Math.hypot(ex - sx, ey - sy);
+      const sag = Math.min(90, dist * 0.22);
+      const c1x = sx + (ex - sx) * 0.28, c1y = sy + sag;
+      const c2x = ex - (ex - sx) * 0.28, c2y = ey + sag * 0.55;
+      path.setAttribute('d', `M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${ex.toFixed(1)} ${ey.toFixed(1)}`);
+      path.style.display = '';
     } else {
-      ln.style.display = 'none';
+      path.style.display = 'none';
     }
   });
 }
@@ -217,18 +226,9 @@ export function fsnClearWires() {
 // Easy full-screen / exit toggle for a bloomed node (the user's Stage 4b requirement):
 // zoom the (Neurite-owned) camera so the node fills the view; toggle again to fly back.
 let fsFullscreenSaved = null;
-export function fsnToggleNodeFullscreen(node) {
-  const G = globalThis.Graph;
-  if (!node || !G || !G.pan || !G.zoom) return;
-  if (!fsFullscreenSaved) {
-    fsFullscreenSaved = { px: G.pan.x, py: G.pan.y, zx: G.zoom.x, zy: G.zoom.y };
-    const A = globalThis.NeuriteAnimation; // Neurite's Animation class (globalThis.Animation is the DOM built-in)
-    if (A && A.zoomToNodeTitle) A.zoomToNodeTitle(node, 1.0);
-  } else {
-    const v = fsFullscreenSaved; fsFullscreenSaved = null;
-    if (globalThis.Autopilot && globalThis.Autopilot.reset) globalThis.Autopilot.reset();
-    G.pan.x = v.px; G.pan.y = v.py; G.zoom.x = v.zx; G.zoom.y = v.zy;
-  }
+export function fsnToggleNodeFullscreen() {
+  const w = topDocWindow();
+  if (w) toggleMaximize(w);
 }
 
 // Design B Stage 4d: fsn actions injected into Neurite's native right-click menu.
@@ -264,8 +264,7 @@ export function fsnMenuActions(menu, x, y) {
     menu.menu.append(menu.option('\u25b3 Ascend to parent', () => { h.ascend(); fsnRecenterPan(); }));
     added = true;
   }
-  const Gx = globalThis.Graph;
-  const blooms = Gx ? Object.values(Gx.nodes).filter(n => n && n.isFsnBloom && !n.removed).length : 0;
+  const blooms = docWindows.size;
   if (constructActive) {
     menu.menu.append(menu.option('◉ Exit construct', () => fsnExitConstruct()));
     added = true;
@@ -298,53 +297,53 @@ let constructSaved = null; // { view, pos[] } to restore on exit
 
 export function fsnInConstruct() { return constructActive; }
 
+/** Open document windows (the floating readers). */
+export function fsnDocCount() { return docWindows.size; }
+
 export function fsnEnterConstruct(label) {
-  const G = globalThis.Graph;
-  if (constructActive || !G || !G.pan || !G.zoom) return false;
-  const nodes = Object.values(G.nodes).filter(n => n && n.isFsnBloom && !n.removed && n.content);
-  if (nodes.length < 1) return false; // nothing bloomed to correlate yet
+  if (constructActive) return false;
+  const entries = [...docWindows.entries()];
+  if (entries.length < 1) return false; // nothing open to correlate yet
   constructActive = true;
-  constructNodes = nodes;
-  constructSaved = {
-    view: { px: G.pan.x, py: G.pan.y, zx: G.zoom.x, zy: G.zoom.y },
-    pos: nodes.map(n => ({ x: n.pos.x, y: n.pos.y, af: n.anchorForce, anchor: n.anchor })),
-  };
-  // drop the 3D skin into the void (tower wires auto-hide via fsnUpdateWires)
+  constructSaved = entries.map(([id, w]) => ({ id, home: { ...w.home }, maximized: w.maximized }));
   const c = document.getElementById('fsn-canvas');
   if (c) c.style.opacity = '0.1';
   document.documentElement.classList.add('fsn-construct');
-  // pull the docs out of their hierarchy: freeze them on a ring around the view center
-  const zmag = Math.hypot(G.zoom.x, G.zoom.y) || 1;
-  const R = zmag * (0.6 + 0.14 * nodes.length);
-  const cx = G.pan.x, cy = G.pan.y + R * 0.35; // shift the ring down so the top node clears the banner
-  nodes.forEach((n, i) => {
-    const a = (i / nodes.length) * Math.PI * 2 - Math.PI / 2;
-    n.pos.x = cx + Math.cos(a) * R;
-    n.pos.y = cy + Math.sin(a) * R;
-    n.anchor = n.pos.scale(1); // clone (vec2 is global-lexical, not on window)
-    n.anchorForce = 1;         // freeze here (updatePosition zeros vel/force when anchored)
-    if (n.draw) n.draw();
+  // ring the open documents around the viewport centre (screen space)
+  const cx = Math.max(innerWidth / 2, 380), cy = innerHeight / 2;
+  const R = Math.min(innerWidth, innerHeight) * 0.28 + entries.length * 14;
+  entries.forEach(([id, w], i) => {
+    if (w.maximized) { w.maximized = false; w.el.classList.remove('maximized'); }
+    const a = (i / entries.length) * Math.PI * 2 - Math.PI / 2;
+    const r = w.el.getBoundingClientRect();
+    w.home = {
+      x: Math.max(10, Math.min(innerWidth - r.width - 10, cx + Math.cos(a) * R - r.width / 2)),
+      y: Math.max(46, Math.min(innerHeight - r.height - 10, cy + Math.sin(a) * R - r.height / 2)),
+    };
+    w.el.classList.add('cx-move'); // CSS-transitioned glide into the ring
+    w.el.style.left = w.home.x + 'px';
+    w.el.style.top = w.home.y + 'px';
+    setTimeout(() => w.el.classList.remove('cx-move'), 600);
   });
-  showConstructBanner(label || 'open documents', nodes.length);
+  showConstructBanner(label || 'open documents', entries.length);
   return true;
 }
 
 export function fsnExitConstruct() {
-  const G = globalThis.Graph;
   if (!constructActive) return;
   const c = document.getElementById('fsn-canvas');
   if (c) c.style.opacity = '';
   document.documentElement.classList.remove('fsn-construct');
-  if (constructSaved && G) {
-    constructNodes.forEach((n, i) => {
-      const s = constructSaved.pos[i]; if (!s || !n.pos) return;
-      n.pos.x = s.x; n.pos.y = s.y; n.anchor = s.anchor; n.anchorForce = s.af; // un-freeze
-      if (n.draw) n.draw();
-    });
-    G.pan.x = constructSaved.view.px; G.pan.y = constructSaved.view.py;
-    G.zoom.x = constructSaved.view.zx; G.zoom.y = constructSaved.view.zy;
+  for (const saved of constructSaved || []) {
+    const w = docWindows.get(saved.id);
+    if (!w) continue;
+    w.home = { ...saved.home };
+    w.el.classList.add('cx-move');
+    w.el.style.left = w.home.x + 'px';
+    w.el.style.top = w.home.y + 'px';
+    setTimeout(() => w.el.classList.remove('cx-move'), 600);
   }
-  constructActive = false; constructNodes = []; constructSaved = null;
+  constructActive = false; constructSaved = null;
   hideConstructBanner();
   clearConstructLinks();
 }
@@ -365,11 +364,12 @@ function clearConstructLinks() { const el = document.getElementById('fsn-constru
 // wires). MVP = "all RAG files correlated against each other"; later, weight/prune by shared
 // tags + LocalRecall relatedness.
 export function fsnUpdateConstructLinks() {
-  const G = globalThis.Graph;
-  if (!constructActive || !G) return;
+  if (!constructActive) return;
   const svg = fsnConstructSvg();
-  const nodes = constructNodes.filter(n => n && !n.removed && n.content && document.body.contains(n.content));
-  const cts = nodes.map(n => { const r = n.content.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  const cts = [...docWindows.values()].map((w) => {
+    const r = w.el.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
   const pairs = [];
   for (let i = 0; i < cts.length; i++) for (let j = i + 1; j < cts.length; j++) pairs.push([i, j]);
   while (svg.children.length > pairs.length) svg.removeChild(svg.lastChild);
@@ -397,34 +397,13 @@ function showConstructBanner(label, n) {
 function hideConstructBanner() { const b = document.getElementById('fsn-construct-banner'); if (b) b.style.display = 'none'; }
 
 export function fsnBloomFile(fileJson) {
-  if (!fsn || typeof globalThis.createTextNodeWithPosAndScale !== 'function') return null;
+  // User direction 2026-08-16: documents open as the ORIGINAL fsn reader window
+  // (floating, fixed pixel scale, a reading tool) — not a Neurite text node
+  // (janky chrome, Graph-zoom-coupled scaling). The window keeps the slight
+  // ambient float and a fluid tether to its file box (fsn-docwin.js).
+  if (!fsn) return null;
   let f; try { f = JSON.parse(fileJson); } catch { return null; }
-  const c = document.getElementById('fsn-canvas');
-  const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
-  const G = globalThis.Graph;
-  const sp = fsn.project(f.x, f.y, f.z); // [sx,sy] physical px, or undefined (behind camera)
-  // Bloom just above the file box, CLAMPED so the ~130px node stays fully on-screen (top-floor
-  // files sit near the top edge). Map that screen point to z-space with Neurite's OWN inverse
-  // (Graph.xyToZ = inverse of Node.draw's fromZtoUV) so it lands there + passes draw()'s
-  // visibility gate. (fsn.unproject_ground is a DIFFERENT ground-plane transform -> off-screen.)
-  let sx, sy;
-  if (sp) { sx = sp[0] * rx + 100; sy = sp[1] * ry - 40; } // up-and-right: wire reads as a diagonal
-  else { sx = window.innerWidth / 2; sy = window.innerHeight / 2; }
-  sx = Math.max(90, Math.min(window.innerWidth - 90, sx));
-  sy = Math.max(80, Math.min(window.innerHeight - 90, sy));
-  const z = (G && G.xyToZ) ? G.xyToZ(sx, sy) : (G && G.pan ? { x: G.pan.x, y: G.pan.y } : { x: 0, y: 0 });
-  const scale = (G && G.zoom) ? Math.hypot(G.zoom.x, G.zoom.y) * 0.5 : 0.5;
-  const content = '# ' + f.name + '\n\n`' + (f.path || '') + '`\n\n_(content loads from FileBrowser at the jp deploy; placeholder at hal)_';
-  const node = globalThis.createTextNodeWithPosAndScale(f.name, content, scale, z.x, z.y);
-  if (node && node.draw) node.draw();
-  if (node) {
-    node.isFsnBloom = true; // tag so the right-click menu offers fsn node actions
-    bloomWires.push({ node, fx: f.x, fy: f.y, fz: f.z }); // keep it wired to the tower (fsnStep)
-    if (node.content) node.content.addEventListener('dblclick', (ev) => {
-      ev.stopPropagation(); fsnToggleNodeFullscreen(node); // easy full-screen / exit toggle
-    });
-  }
-  return node;
+  return openDocWindow(f);
 }
 
 function fsnBufferSize() {

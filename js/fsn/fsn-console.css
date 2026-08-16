@@ -815,3 +815,85 @@ html.fsn-follower #login { display: none !important; }
 }
 #mosaic-expand:hover { background: rgba(10, 102, 68, 0.35); }
 @media (max-width: 700px) { #mosaic-expand { display: none; } } /* phones don't tile windows */
+
+/* ===== fsn document windows + navigator motion (2026-08-16, not standalone CSS) ===== */
+/* The floating reader: the ORIGINAL fsn document window as a tethered, draggable,
+   fixed-pixel-scale surface. Doubles as the reading tool (⤢ / ctrl+m maximizes). */
+.fsn-docwin {
+  position: fixed; width: 440px; height: 360px; z-index: 40;
+  display: flex; flex-direction: column;
+  background: #04100f;
+  border: 1px solid #0a6; border-top: 2px solid #17b08c;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 18px rgba(23, 176, 140, 0.12);
+  font-family: "Courier New", monospace;
+}
+.fsn-docwin.maximized {
+  left: 258px !important; top: 8px !important;
+  width: calc(100vw - 266px); height: calc(100vh - 16px);
+  z-index: 60 !important;
+}
+body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(100vw - 16px); }
+.fsn-docwin.cx-move { transition: left 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.dw-bar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: linear-gradient(180deg, #0a2f2a, #072220);
+  border-bottom: 1px solid #0a5548;
+  cursor: grab; user-select: none; touch-action: none;
+}
+.dw-bar:active { cursor: grabbing; }
+.dw-title { color: #9ff3e0; font-size: 12px; letter-spacing: 0.06em; white-space: nowrap; }
+.dw-path {
+  color: #4a8f80; font-size: 10px; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dw-max, .dw-close {
+  min-width: 28px; height: 24px; cursor: pointer;
+  background: rgba(95, 230, 208, 0.08); color: #9ff3e0;
+  border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
+  font: 12px "Courier New", monospace;
+}
+.dw-max:hover, .dw-close:hover { background: rgba(95, 230, 208, 0.22); }
+.dw-close:hover { color: #ffb0a0; border-color: rgba(255, 176, 160, 0.5); }
+.dw-frame { flex: 1; width: 100%; border: 0; background: #04100f; }
+
+/* The fluid tether: a slack cable from the file box to its window, with a slow
+   energy-flow shimmer. Replaces the stiff dashed line. */
+.fsn-tether {
+  fill: none; stroke: #5fe6d0; stroke-width: 1.6;
+  stroke-opacity: 0.55; stroke-linecap: round;
+  stroke-dasharray: 7 9;
+  animation: fsn-tether-flow 1.6s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(95, 230, 208, 0.5));
+}
+@keyframes fsn-tether-flow { to { stroke-dashoffset: -16; } }
+@media (prefers-reduced-motion: reduce) { .fsn-tether { animation: none; stroke-dasharray: none; } }
+
+/* Navigator retract: the whole panel slides away behind an edge tab for reading room. */
+#panel-collapse {
+  position: fixed; top: 46%; left: 248px; z-index: 26;
+  width: 22px; height: 64px; padding: 0; cursor: pointer;
+  background: rgba(6, 30, 28, 0.92); color: #9ff3e0;
+  border: 1px solid #0a6; border-left: none; border-radius: 0 4px 4px 0;
+  font: 14px "Courier New", monospace;
+  transition: left 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#panel-collapse:hover { background: rgba(10, 102, 68, 0.4); }
+#tree { transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+body.panel-collapsed #tree { transform: translateX(-102%); }
+body.panel-collapsed #panel-collapse { left: 0; }
+@media (max-width: 700px) { #panel-collapse { display: none; } } /* phones use ☰ */
+@media (prefers-reduced-motion: reduce) { #tree, #panel-collapse { transition: none; } }
+
+/* Folder expand/retract carets in the tree (injected by fsn-console.js). */
+.row-caret {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 100%; padding: 0; cursor: pointer;
+  background: none; border: none; color: #4a8f80;
+  font: 10px "Courier New", monospace;
+}
+.row-caret:hover { color: #9ff3e0; }
+#tree-rows .row { position: relative; }
+#tree-rows .row.collapsed-away { display: none; }
+
+/* Console chrome stays above document windows (their z climbs on focus). */
+#panel-collapse, #mosaic-expand, #session-btn, #panel-toggle { z-index: 500; }

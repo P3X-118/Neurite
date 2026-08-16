@@ -130,6 +130,17 @@ export class FsnEmbed {
         wasm.fsnembed_orbit(this.__wbg_ptr, dx, dy);
     }
     /**
+     * Absolute orbit angles `[yaw, pitch]` — the mosaic leader broadcasts these
+     * so followers render the identical camera (deltas via `orbit` can't sync).
+     * @returns {Float32Array}
+     */
+    orbit_angles() {
+        const ret = wasm.fsnembed_orbit_angles(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
      * World anchor `[x, y, z]` (just above the platform) for pedestal `i`.
      * @param {number} i
      * @returns {Float32Array | undefined}
@@ -228,6 +239,26 @@ export class FsnEmbed {
         wasm.fsnembed_resize(this.__wbg_ptr, width, height);
     }
     /**
+     * Render this window as sub-rect `[x, y, w, h]` (fractions of the virtual
+     * canvas, y down) of the shared camera — the off-axis frustum that makes
+     * windows stitch. Identity rect returns to normal single-window rendering.
+     * @param {number} x
+     * @param {number} y
+     * @param {number} w
+     * @param {number} h
+     */
+    set_mosaic_rect(x, y, w, h) {
+        wasm.fsnembed_set_mosaic_rect(this.__wbg_ptr, x, y, w, h);
+    }
+    /**
+     * Follower-side: adopt the leader's absolute orbit angles.
+     * @param {number} yaw
+     * @param {number} pitch
+     */
+    set_orbit_angles(yaw, pitch) {
+        wasm.fsnembed_set_orbit_angles(this.__wbg_ptr, yaw, pitch);
+    }
+    /**
      * Design B: slave fsn's camera to Neurite's `Graph.pan`/`Graph.zoom` so the 3D
      * landscape is the DRIVEN visual skin (Neurite owns coordinates + infinite zoom).
      * `center_x`/`center_z` = `Graph.pan` already scaled to fsn world; `scale` =
@@ -239,6 +270,15 @@ export class FsnEmbed {
      */
     set_view(center_x, center_z, scale) {
         wasm.fsnembed_set_view(this.__wbg_ptr, center_x, center_z, scale);
+    }
+    /**
+     * Switch the console to board `i` — rebuilds the scene + panel and flags a
+     * recenter. Public so a mosaic follower can mirror the leader's board
+     * switch; the panel's own Cmd::SwitchBoard drains through here too.
+     * @param {number} i
+     */
+    switch_board(i) {
+        wasm.fsnembed_switch_board(this.__wbg_ptr, i);
     }
     /**
      * Pedestal the panel asked to fly to since the last poll (or -1). The host
@@ -2269,37 +2309,37 @@ function __wbg_get_imports() {
             arg0.writeTexture(arg1, arg2, arg3, arg4);
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1331, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1332, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h19848e4fc87cb18a);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2486, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2487, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h671b2dbc752d25be);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 236, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 237, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h1c1800e713c48e51);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1331, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1332, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h19848e4fc87cb18a_3);
             return ret;
         },
         __wbindgen_cast_0000000000000005: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("KeyboardEvent")], shim_idx: 236, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("KeyboardEvent")], shim_idx: 237, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h1c1800e713c48e51_4);
             return ret;
         },
         __wbindgen_cast_0000000000000006: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MouseEvent")], shim_idx: 156, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MouseEvent")], shim_idx: 209, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hc538e335672350a7);
             return ret;
         },
         __wbindgen_cast_0000000000000007: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 238, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 239, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h09321177e897e9e4);
             return ret;
         },

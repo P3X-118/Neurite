@@ -14,6 +14,7 @@ import {
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 import { mountFsnConsole } from './fsn-console.js';
+import { initMosaic, isMosaicFollower } from './fsn-mosaic.js';
 
 // Bridge the ESM shims into Neurite's GLOBAL scope — its core files are classic
 // scripts (loaded dynamically by main.js's PageLoad), so they can't `import`.
@@ -35,6 +36,9 @@ export async function bootFsnSubstrate() {
   // The fsn CONSOLE shell (panel/labels/reader markup + CSS + chrome script)
   // must exist BEFORE create_console — the Rust web_ui binds to these ids.
   await mountFsnConsole();
+  // Stage 8: an auxiliary mosaic window renders the landscape only — the
+  // console chrome hides (CSS on html.fsn-follower); the leader keeps the panel.
+  if (isMosaicFollower()) document.documentElement.classList.add('fsn-follower');
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const canvas = document.createElement('canvas');
@@ -84,6 +88,26 @@ export async function bootFsnSubstrate() {
   };
   const flyToPedestal = (i) => { const tp = fsnPedestalPan(i); if (tp) flyPanTo(tp, 0.45); };
   const flyOverview = () => flyPanTo({ x: 0, y: 0 }, 1.0);
+
+  // Stage 8 mosaic: shared world, N viewports. The leader broadcasts the camera
+  // + board; followers adopt them and every window renders its own off-axis
+  // sub-rect of the union desktop area (fsnMosaic.mosaicRect -> set_mosaic_rect).
+  let lastBoardSent = -1;
+  const activeBoardIdx = () =>
+    [...document.querySelectorAll('#board-rows .board-row')].findIndex((r) => r.classList.contains('active'));
+  const mosaic = initMosaic({
+    onCamera: (m) => {
+      const G = globalThis.Graph, h = fsnHandle();
+      if (!G || !h) return;
+      G.pan.x = m.pan.x; G.pan.y = m.pan.y;
+      G.zoom.x = m.zoom.x; G.zoom.y = m.zoom.y;
+      if (h.set_orbit_angles) h.set_orbit_angles(m.yaw, m.pitch);
+    },
+    onWorld: (m) => {
+      const h = fsnHandle();
+      if (h && h.switch_board && m.board >= 0 && m.board !== activeBoardIdx()) h.switch_board(m.board);
+    },
+  });
   const loop = (now) => {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
@@ -92,6 +116,18 @@ export async function bootFsnSubstrate() {
     if (fsnTakeRecenter()) flyOverview(); // board switch → overview
     stepFlight(now);
     fsnDriveView(); // Design B: fsn camera tracks Graph.pan/zoom
+    { // Stage 8 mosaic duties
+      const G = globalThis.Graph, h = fsnHandle();
+      if (G && h) {
+        mosaic.applyMosaicRect(h);
+        if (h.orbit_angles) {
+          const [yaw, pitch] = h.orbit_angles();
+          mosaic.broadcastCamera({ x: G.pan.x, y: G.pan.y }, { x: G.zoom.x, y: G.zoom.y }, yaw, pitch);
+        }
+        const b = activeBoardIdx();
+        if (b !== lastBoardSent && b >= 0) { lastBoardSent = b; mosaic.broadcastWorld(b); }
+      }
+    }
     fsnStep(dt);
     requestAnimationFrame(loop);
   };

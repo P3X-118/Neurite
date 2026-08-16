@@ -36,10 +36,15 @@ export function isMosaicFollower() {
   return new URLSearchParams(location.search).get('mosaic') === 'follower';
 }
 
-/** Desktop-space rect of this window (no-permission pose; WM API is the 8c upgrade). */
+/** Desktop-space rect of this window (no-permission pose; WM API is the 8c upgrade).
+ * `?mosaicpose=x,y` overrides the position — headless windows all report
+ * screenX/Y 0, so verification (and kiosks without a WM) can pin poses. */
 export function windowPose() {
+  let x = window.screenX, y = window.screenY;
+  const ov = new URLSearchParams(location.search).get('mosaicpose');
+  if (ov) { const p = ov.split(',').map(Number); if (p.length >= 2 && p.every(Number.isFinite)) { x = p[0]; y = p[1]; } }
   return {
-    x: window.screenX, y: window.screenY,
+    x, y,
     w: window.innerWidth, h: window.innerHeight,
     dpr: Math.min(window.devicePixelRatio || 1, 2),
   };
@@ -107,12 +112,22 @@ export function initMosaic({ onCamera, onWorld } = {}) {
       mosaicState.seq++;
       say({ t: 'cam', pan, zoom, yaw, pitch, seq: mosaicState.seq });
     },
+    /** Leader: broadcast world state (active board) on change. */
+    broadcastWorld(board) {
+      if (mosaicState.role !== 'leader') return;
+      say({ t: 'world', board });
+    },
     /** Both roles: push this window's sub-rect into the embed (8a API). */
     applyMosaicRect(fsn) {
       const r = mosaicRect();
       if (fsn && fsn.set_mosaic_rect) fsn.set_mosaic_rect(r.x, r.y, r.w, r.h);
     },
   };
+}
+
+// Probe/debug bridge (also used by the verification suite).
+if (typeof globalThis !== 'undefined') {
+  globalThis.fsnMosaic = { state: mosaicState, windowPose, virtualCanvas, mosaicRect, openFollowerWindow, isMosaicFollower };
 }
 
 /** Console affordance (8b): open a pre-positioned follower window. */

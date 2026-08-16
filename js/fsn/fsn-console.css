@@ -794,3 +794,24 @@
       @media (prefers-reduced-motion: reduce) {
         #tree { transition: none; }
       }
+
+/* ===== Stage 8 mosaic (NOT part of the extracted standalone CSS above) ===== */
+/* Follower windows are pure landscape viewports: hide the console chrome.
+   Labels stay — they project per-window and are part of the cohesive view. */
+html.fsn-follower #tree,
+html.fsn-follower #panel-toggle,
+html.fsn-follower #session-btn,
+html.fsn-follower #reader,
+html.fsn-follower #hint,
+html.fsn-follower #mosaic-expand,
+html.fsn-follower #login { display: none !important; }
+#mosaic-expand {
+  position: fixed; top: 10px; right: 120px; z-index: 30;
+  min-height: 44px; padding: 8px 14px; cursor: pointer;
+  background: rgba(6, 30, 28, 0.92); color: #9ff3e0;
+  border: 1px solid #0a6; border-radius: 2px;
+  font-family: "Courier New", monospace; font-size: 12px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+#mosaic-expand:hover { background: rgba(10, 102, 68, 0.35); }
+@media (max-width: 700px) { #mosaic-expand { display: none; } } /* phones don't tile windows */

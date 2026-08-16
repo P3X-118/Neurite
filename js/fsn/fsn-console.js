@@ -78,4 +78,14 @@ function wireChrome() {
   if (frame) frame.addEventListener('load', () => {
     try { frame.contentDocument?.addEventListener('keydown', onCtrlM); } catch {}
   });
+
+  // Stage 8 mosaic: "expand view" opens an auxiliary window that tiles into the
+  // same landscape (hidden on followers via html.fsn-follower CSS).
+  const ex = document.createElement('button');
+  ex.id = 'mosaic-expand';
+  ex.type = 'button';
+  ex.textContent = '⧉ expand view';
+  ex.title = 'Open another window that extends this landscape (drag it to a second screen)';
+  ex.addEventListener('click', () => { if (globalThis.fsnMosaic) globalThis.fsnMosaic.openFollowerWindow(); });
+  document.body.appendChild(ex);
 }

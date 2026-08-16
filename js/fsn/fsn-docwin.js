@@ -13,6 +13,19 @@
 import { animate } from './motion.mjs';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Run an animation, then ALWAYS call done exactly once — resolved promise,
+ * thenable controls, throw, or none of the above (timeout fallback). */
+function animateThen(el, keyframes, opts, done) {
+  let called = false;
+  const once = () => { if (!called) { called = true; done(); } };
+  try {
+    const ctl = animate(el, keyframes, opts);
+    const p = ctl && (ctl.finished || ctl);
+    if (p && typeof p.then === 'function') p.then(once, once);
+  } catch (e) { once(); return; }
+  setTimeout(once, ((opts && opts.duration) || 0.3) * 1000 + 80);
+}
 let seq = 0;
 let zTop = 40;
 /** id -> { el, body, anchor:{x,y,z}, name, source, path, phase, dragging, maximized, home:{x,y} } */
@@ -25,9 +38,10 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 /** The reader-style document shell for plain text (monospace, selectable — a reading tool). */
 const textDoc = (name, text) =>
   `<!doctype html><body style="margin:0;padding:18px 22px;background:#04100f;color:#b8efe2;` +
-  `font:13px/1.55 'Courier New',monospace;white-space:pre-wrap;word-break:break-word;` +
-  `-webkit-user-select:text;user-select:text"><div style="color:#5fe6d0;border-bottom:1px solid #0a5548;` +
-  `padding-bottom:8px;margin-bottom:14px">▤ ${esc(name)}</div>${esc(text)}</body>`;
+  `font:13px/1.55 'Courier New',monospace;-webkit-user-select:text;user-select:text">` +
+  `<div style="max-width:78ch;margin:0 auto">` + // reading measure — long docs stay readable maximized
+  `<div style="color:#5fe6d0;border-bottom:1px solid #0a5548;padding-bottom:8px;margin-bottom:14px">▤ ${esc(name)}</div>` +
+  `<div style="white-space:pre-wrap;word-break:break-word">${esc(text)}</div></div></body>`;
 
 export function openDocWindow(f) {
   const id = 'docwin-' + ++seq;
@@ -38,6 +52,9 @@ export function openDocWindow(f) {
     `<div class="dw-bar">` +
     `<span class="dw-title">▤ ${esc(f.name)}</span>` +
     `<span class="dw-path">${esc(f.source)} : ${esc(f.path)}</span>` +
+    `<button class="dw-fz" data-d="-1" title="smaller text" type="button">A−</button>` +
+    `<button class="dw-fz" data-d="1" title="larger text" type="button">A+</button>` +
+    `<button class="dw-min" title="minimize — pull back to its tower" type="button">−</button>` +
     `<button class="dw-max" title="maximize / restore (ctrl+m)" type="button">⤢</button>` +
     `<button class="dw-close" title="close" type="button">✕</button>` +
     `</div>` +
@@ -67,7 +84,10 @@ export function openDocWindow(f) {
     phase: Math.random() * Math.PI * 2,
     dragging: false, maximized: false,
     home: { x: sx, y: sy },
+    fontPx: 13, native: nativeView(f.name),
+    minimized: false, chip: null,
   };
+  if (win.native) el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
   docWindows.set(id, win);
   loadContent(win);
 
@@ -94,7 +114,15 @@ export function openDocWindow(f) {
   });
   bar.addEventListener('pointerup', () => { win.dragging = false; });
   el.querySelector('.dw-close').addEventListener('click', () => closeDocWindow(id));
+  el.querySelectorAll('.dw-fz').forEach((b) => b.addEventListener('click', () => {
+    win.fontPx = Math.max(10, Math.min(22, win.fontPx + +b.dataset.d));
+    try { // srcdoc is same-origin; native views (pdf/img) have no text to size
+      const doc = win.body.contentDocument;
+      if (doc && doc.body) doc.body.style.fontSize = win.fontPx + 'px';
+    } catch (e) { /* cross-origin native view — no-op */ }
+  }));
   el.querySelector('.dw-max').addEventListener('click', () => toggleMaximize(win));
+  el.querySelector('.dw-min').addEventListener('click', () => minimizeDocWindow(win));
   el.addEventListener('dblclick', (e) => { if (e.target.closest('.dw-bar')) toggleMaximize(win); });
   return win;
 }
@@ -124,9 +152,9 @@ export function closeDocWindow(id) {
   const win = docWindows.get(id);
   if (!win) return;
   docWindows.delete(id);
+  if (win.chip) win.chip.remove();
   if (reduced) { win.el.remove(); return; }
-  animate(win.el, { opacity: [1, 0], scale: [1, 0.95] }, { duration: 0.16 }).finished
-    .then(() => win.el.remove()).catch(() => win.el.remove());
+  animateThen(win.el, { opacity: [1, 0], scale: [1, 0.95] }, { duration: 0.16 }, () => win.el.remove());
 }
 
 /** FLIP maximize/restore — the full-tab READING view. */
@@ -146,10 +174,89 @@ export function toggleMaximize(win) {
   }, { duration: 0.3, ease: [0.2, 0.8, 0.2, 1] });
 }
 
+/** Screen position of a window's file-box anchor (CSS px), or null. */
+function anchorScreen(win) {
+  const fsn = globalThis.fsnHandle && globalThis.fsnHandle();
+  if (!fsn || !fsn.project) return null;
+  const p = fsn.project(win.anchor.x, win.anchor.y, win.anchor.z);
+  if (!p) return null;
+  const c = document.getElementById('fsn-canvas');
+  const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
+  return { x: p[0] * rx, y: p[1] * ry };
+}
+
+function chipsLayer() {
+  let el = document.getElementById('fsn-dockchips');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'fsn-dockchips';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+/** Minimize: the window travels back to its file box (the tether visually reels
+ * it in — the cable endpoint trails the window), then docks as a chip on the
+ * tower. Multiple documents from one folder each dock at their own file box. */
+export function minimizeDocWindow(win) {
+  if (win.minimized) return;
+  if (win.maximized) toggleMaximize(win);
+  win.minimized = true;
+  const a = anchorScreen(win) || { x: innerWidth / 2, y: innerHeight * 0.7 };
+  const r = win.el.getBoundingClientRect();
+  const settle = () => {
+    win.el.style.display = 'none';
+    win.el.style.transform = '';
+    win.el.style.opacity = '';
+    if (!win.chip) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'fsn-dockchip';
+      chip.textContent = '▤ ' + win.name;
+      chip.title = 'restore ' + win.name;
+      chip.addEventListener('click', () => restoreDocWindow(win));
+      chipsLayer().appendChild(chip);
+      win.chip = chip;
+    }
+    win.chip.style.display = '';
+    if (!reduced) animate(win.chip, { opacity: [0, 1], scale: [0.6, 1] }, { duration: 0.18 });
+  };
+  if (reduced) { settle(); return; }
+  win.el.style.transformOrigin = 'top left';
+  animateThen(win.el, {
+    x: [0, a.x - r.x], y: [0, a.y - r.y],
+    scaleX: [1, 0.07], scaleY: [1, 0.07],
+    opacity: [1, 0.25],
+  }, { duration: 0.42, ease: [0.35, 0, 0.25, 1] }, settle);
+}
+
+/** Restore: the window flies back out from its tower to where it lived. */
+export function restoreDocWindow(win) {
+  if (!win.minimized) return;
+  win.minimized = false;
+  if (win.chip) win.chip.style.display = 'none';
+  const el = win.el;
+  el.style.display = '';
+  el.style.left = win.home.x + 'px';
+  el.style.top = win.home.y + 'px';
+  el.style.zIndex = ++zTop;
+  if (reduced) return;
+  const a = anchorScreen(win);
+  const r = el.getBoundingClientRect();
+  el.style.transformOrigin = 'top left';
+  const fx = a ? a.x - r.x : 40, fy = a ? a.y - r.y : 40;
+  animate(el, {
+    x: [fx, 0], y: [fy, 0],
+    scaleX: [0.07, 1], scaleY: [0.07, 1],
+    opacity: [0.25, 1],
+  }, { duration: 0.42, ease: [0.35, 0, 0.25, 1] });
+}
+
 /** Topmost open window (Ctrl+M target). */
 export function topDocWindow() {
   let top = null, z = -1;
   for (const w of docWindows.values()) {
+    if (w.minimized) continue;
     const wz = +w.el.style.zIndex || 0;
     if (wz > z) { z = wz; top = w; }
   }
@@ -159,7 +266,21 @@ export function topDocWindow() {
 /** Per-frame: ambient float (slight, per-window phase) — paused while dragging,
  * maximized, or reduced-motion. Returns screen anchor points for the tethers. */
 export function stepDocWindows(now) {
+  globalThis.__fsnDocSteps = (globalThis.__fsnDocSteps || 0) + 1; // liveness (debug)
   for (const w of docWindows.values()) {
+    if (w.minimized) { // dock chip rides its tower (tracks orbit/zoom per frame)
+      if (w.chip) {
+        const a = anchorScreen(w);
+        if (a) {
+          w.chip.style.display = '';
+          w.chip.style.left = Math.round(a.x - w.chip.offsetWidth / 2) + 'px';
+          w.chip.style.top = Math.round(a.y - 34) + 'px';
+        } else {
+          w.chip.style.display = 'none'; // anchor behind the camera
+        }
+      }
+      continue;
+    }
     if (w.dragging || w.maximized) { w.el.style.transform = ''; continue; }
     if (reduced) continue;
     const t = now / 1000;

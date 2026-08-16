@@ -897,3 +897,27 @@ body.panel-collapsed #panel-collapse { left: 0; }
 
 /* Console chrome stays above document windows (their z climbs on focus). */
 #panel-collapse, #mosaic-expand, #session-btn, #panel-toggle { z-index: 500; }
+
+/* Minimized documents dock as chips AT their tower (per-frame tracked). */
+#fsn-dockchips { position: fixed; inset: 0; pointer-events: none; z-index: 35; }
+.fsn-dockchip {
+  position: absolute; pointer-events: auto; cursor: pointer;
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 4px 10px; min-height: 24px;
+  background: rgba(4, 20, 18, 0.92); color: #9ff3e0;
+  border: 1px solid #17b08c; border-radius: 3px;
+  font: 11px "Courier New", monospace; letter-spacing: 0.04em;
+  box-shadow: 0 0 10px rgba(23, 176, 140, 0.35);
+}
+.fsn-dockchip:hover { background: rgba(10, 102, 68, 0.55); color: #e8fffb; }
+/* − shares the bar-button look */
+.dw-min { min-width: 28px; height: 24px; cursor: pointer;
+  background: rgba(95, 230, 208, 0.08); color: #9ff3e0;
+  border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
+  font: 12px "Courier New", monospace; }
+.dw-min:hover { background: rgba(95, 230, 208, 0.22); }
+.dw-fz { min-width: 26px; height: 24px; cursor: pointer;
+  background: rgba(95, 230, 208, 0.08); color: #9ff3e0;
+  border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
+  font: 10px "Courier New", monospace; }
+.dw-fz:hover { background: rgba(95, 230, 208, 0.22); }

@@ -14,7 +14,7 @@
 // Wasm assets are vendored in ./pkg (built via `wasm-pack build --target web`).
 
 import init, { FsnEmbed } from './pkg/fsn.js';
-import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows } from './fsn-docwin.js';
+import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow } from './fsn-docwin.js';
 import wasmUrl from './pkg/fsn_bg.wasm?url'; // Vite: resolves to the served asset URL
 
 // Neurite world units are ~O(1) around the origin; fsn's landscape spans tens of
@@ -22,6 +22,7 @@ import wasmUrl from './pkg/fsn_bg.wasm?url'; // Vite: resolves to the served ass
 const WORLD_SCALE = 12.0;
 
 let fsn = null;
+const reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Which visualization is the substrate. **IRIX/fsn is the DEFAULT**; the Neurite
  * fractal is admin-only, off unless explicitly turned on (`?viz=fractal` or
@@ -59,6 +60,11 @@ export async function initFsnSubstrate(canvas, { console: consoleMode = false } 
 export function fsnTakeFocus() { return fsn && fsn.take_focus ? fsn.take_focus() : -1; }
 /** True once after a board switch — recenter to the overview. */
 export function fsnTakeRecenter() { return fsn && fsn.take_recenter ? !!fsn.take_recenter() : false; }
+/** fsn world (x,z) → the Graph.pan that centers it (file fly-to). */
+export function fsnWorldToPan(x, z) {
+  return { x: x / WORLD_SCALE, y: z / WORLD_SCALE };
+}
+
 /** Graph.pan target that centers pedestal `i` (fsn world → z-space). */
 export function fsnPedestalPan(i) {
   const a = fsn && fsn.pedestal_anchor ? fsn.pedestal_anchor(i) : null;
@@ -182,7 +188,7 @@ export function fsnUpdateWires() {
   const wel = document.getElementById('fsn-wires');
   if (constructActive) { if (wel) wel.style.display = 'none'; return; } // tethers drop in the construct
   if (wel && wel.style.display === 'none') wel.style.display = '';
-  const wins = [...docWindows.values()].filter((w) => !w.maximized);
+  const wins = [...docWindows.values()].filter((w) => !w.maximized && !w.minimized);
   const el = document.getElementById('fsn-wires');
   if (wins.length === 0) { if (el) el.replaceChildren(); return; }
   const svg = fsnWiresSvg();
@@ -200,12 +206,22 @@ export function fsnUpdateWires() {
     const r = w.el.getBoundingClientRect();                    // includes the float transform
     if (a && r.width > 0) {
       const sx = a[0] * rx, sy = a[1] * ry;
-      // attach to the window's nearest vertical edge, at bar height
-      const ey = r.top + 16;
-      const ex = sx < r.left + r.width / 2 ? r.left : r.right;
-      // a slack cable: sag scales with distance, capped — reads organic, not stiff
+      // attach to the window's nearest vertical edge, at bar height — but the
+      // cable end TRAILS the window slightly (exp smoothing), so drags and the
+      // float read as the cable catching up: the fluid feel.
+      const eyT = r.top + 16;
+      const exT = sx < r.left + r.width / 2 ? r.left : r.right;
+      const now = performance.now();
+      const tdt = Math.min((now - (w._tt || now)) / 1000, 0.1);
+      w._tt = now;
+      if (w._tx === undefined) { w._tx = exT; w._ty = eyT; }
+      const k = 1 - Math.exp(-tdt * 9);
+      w._tx += (exT - w._tx) * k;
+      w._ty += (eyT - w._ty) * k;
+      const ex = w._tx, ey = w._ty;
+      // a slack cable: sag scales with distance (capped) and BREATHES gently
       const dist = Math.hypot(ex - sx, ey - sy);
-      const sag = Math.min(90, dist * 0.22);
+      const sag = Math.min(90, dist * 0.22) + (reducedMotion ? 0 : Math.sin(now / 900 + w.phase) * 4);
       const c1x = sx + (ex - sx) * 0.28, c1y = sy + sag;
       const c2x = ex - (ex - sx) * 0.28, c2y = ey + sag * 0.55;
       path.setAttribute('d', `M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${ex.toFixed(1)} ${ey.toFixed(1)}`);
@@ -313,6 +329,7 @@ export function fsnEnterConstruct(label) {
   const cx = Math.max(innerWidth / 2, 380), cy = innerHeight / 2;
   const R = Math.min(innerWidth, innerHeight) * 0.28 + entries.length * 14;
   entries.forEach(([id, w], i) => {
+    if (w.minimized) restoreDocWindow(w); // correlating = showing them
     if (w.maximized) { w.maximized = false; w.el.classList.remove('maximized'); }
     const a = (i / entries.length) * Math.PI * 2 - Math.PI / 2;
     const r = w.el.getBoundingClientRect();

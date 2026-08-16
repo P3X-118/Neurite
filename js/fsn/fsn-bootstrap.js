@@ -10,7 +10,7 @@ import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
   fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions,
   fsnEnterConstruct, fsnExitConstruct, fsnInConstruct, fsnDocCount, fsnToggleNodeFullscreen,
-  fsnTakeFocus, fsnTakeRecenter, fsnPedestalPan,
+  fsnTakeFocus, fsnTakeRecenter, fsnPedestalPan, fsnWorldToPan,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 import { mountFsnConsole } from './fsn-console.js';
@@ -109,6 +109,7 @@ export async function bootFsnSubstrate() {
     },
   });
   const loop = (now) => {
+    globalThis.__fsnFrames = (globalThis.__fsnFrames || 0) + 1; // loop liveness (debug)
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     const fi = fsnTakeFocus();          // panel fly-to → ease Graph there
@@ -146,6 +147,7 @@ export async function bootFsnSubstrate() {
   // (interface.js onMouseDown, fsnOwnsCamera), so no propagation games.
   const isBackground = (t) => t === canvas || (t && t.id === 'svg_bg') || t === document.body;
   let orbiting = false, btn = 0, moved = 0, px0 = 0, py0 = 0, lx = 0, ly = 0;
+  let pendingFileZoom = 0; // single-click file-zoom, cancelled by dblclick-open
   addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.button !== 2) return;
     if (!isBackground(e.target)) return;
@@ -163,11 +165,28 @@ export async function bootFsnSubstrate() {
   addEventListener('pointerup', (e) => {
     if (!orbiting) return;
     orbiting = false;
-    // a left press that never really moved is a CLICK → fly to the dir under it
+    // a left press that never really moved is a CLICK → fly to what's under it:
+    // a directory pedestal flies to the dir; a FILE zooms in close on the file
+    // (user-directed 2026-08-16: "single clicking on files should zoom them to
+    // view"). Double-click still OPENS the file as a document window.
     if (btn === 0 && moved < 6) {
       const h = fsnHandle();
       const i = h && h.pick_at ? h.pick_at(e.clientX * dpr, e.clientY * dpr) : -1;
-      if (i >= 0) flyToPedestal(i);
+      if (i >= 0) {
+        flyToPedestal(i);
+      } else if (h && h.pick_file_at && e.detail < 2) {
+        // DELAYED so a double-click (open) isn't sabotaged: the first click of a
+        // dblclick must NOT start the fly, or the file moves out from under the
+        // second click. Cancelled by the dblclick handler below.
+        const fj = h.pick_file_at(e.clientX * dpr, e.clientY * dpr);
+        if (fj) {
+          try {
+            const f = JSON.parse(fj);
+            clearTimeout(pendingFileZoom);
+            pendingFileZoom = setTimeout(() => flyPanTo(fsnWorldToPan(f.x, f.z), 0.18), 280);
+          } catch (err) { /* unparseable pick — ignore */ }
+        }
+      }
     }
     // a right-DRAG is an orbit, not a menu request — Neurite opens its menu on
     // mouseup regardless, so close it right after
@@ -195,6 +214,7 @@ export async function bootFsnSubstrate() {
     if (e.key === 'Escape' && fsnInConstruct()) { e.preventDefault(); e.stopPropagation(); fsnExitConstruct(); }
   }, true);
   addEventListener('dblclick', (e) => {
+    clearTimeout(pendingFileZoom); // the double-click OPENS — don't also fly
     const path = fsnDescendAt(e.clientX, e.clientY, dpr);
     if (path) { recenter(); console.log('[fsn] descended ->', path); return; }
     const fileJson = fsnPickFileAt(e.clientX, e.clientY, dpr);

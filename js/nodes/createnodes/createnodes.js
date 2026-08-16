@@ -1,4 +1,15 @@
 ﻿On.dblclick(document, (e) => {
+    // fsn console (Design B): a PLAIN background double-click is fsn's gesture
+    // (descend a floor / bloom a file — handled at window level, AFTER document
+    // in the bubble phase, so we must not stopPropagation here). Modifier
+    // double-clicks (alt=AI node, ctrl=link, shift/nodeMode=note) stay Neurite's.
+    if (
+        typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive() &&
+        !e.getModifierState(controls.altKey.value) &&
+        !e.getModifierState(controls.controlKey.value) &&
+        !App.nodeMode
+    ) return;
+
     e.stopPropagation();
 
     // Ensure the click target is the background SVG

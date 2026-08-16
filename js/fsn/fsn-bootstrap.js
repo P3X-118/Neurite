@@ -137,29 +137,43 @@ export async function bootFsnSubstrate() {
   // LEFT-drag = orbit (stopPropagation so Neurite never pans on it), wheel =
   // zoom (Neurite's infinite z-zoom), click dir = fly, Esc = overview. Right-drag
   // also orbits (kept from Design B dev).
-  let orbiting = false, moved = 0, lx = 0, ly = 0;
-  canvas.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    orbiting = true; moved = 0; lx = e.clientX; ly = e.clientY;
-    flight = null;               // user input interrupts a flight
-    e.stopPropagation();         // keep Neurite's pan/node-create off left-drag
+  // REAL events land on Neurite's full-viewport #svg_bg, which sits ABOVE the
+  // fsn canvas — canvas-scoped listeners never fire for actual input (found
+  // 2026-08-16 with Input.dispatchMouseEvent; synthetic canvas-targeted events
+  // had masked it). So: listen at WINDOW level and claim only BACKGROUND
+  // presses by target — presses on nodes / panel / labels target those elements
+  // and are ignored here. Neurite's own camera-drag is gated at the source
+  // (interface.js onMouseDown, fsnOwnsCamera), so no propagation games.
+  const isBackground = (t) => t === canvas || (t && t.id === 'svg_bg') || t === document.body;
+  let orbiting = false, btn = 0, moved = 0, px0 = 0, py0 = 0, lx = 0, ly = 0;
+  addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.button !== 2) return;
+    if (!isBackground(e.target)) return;
+    orbiting = true; btn = e.button; moved = 0;
+    px0 = lx = e.clientX; py0 = ly = e.clientY;
+    flight = null; // user input interrupts a camera flight
   });
-  addEventListener('pointerdown', (e) => { if (e.button === 2) { orbiting = true; moved = 0; lx = e.clientX; ly = e.clientY; } });
   addEventListener('pointermove', (e) => {
     if (!orbiting) return;
-    moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
     fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
     lx = e.clientX; ly = e.clientY;
+    // displacement from the PRESS (not summed jitter — a wobbly click stays a click)
+    moved = Math.max(moved, Math.hypot(e.clientX - px0, e.clientY - py0));
   });
   addEventListener('pointerup', (e) => {
     if (!orbiting) return;
     orbiting = false;
-    // a left press that never dragged is a CLICK → fly to the dir under it
-    if (e.button === 0 && moved < 6) {
+    // a left press that never really moved is a CLICK → fly to the dir under it
+    if (btn === 0 && moved < 6) {
       const h = fsnHandle();
       const i = h && h.pick_at ? h.pick_at(e.clientX * dpr, e.clientY * dpr) : -1;
       if (i >= 0) flyToPedestal(i);
     }
+    // a right-DRAG is an orbit, not a menu request — Neurite opens its menu on
+    // mouseup regardless, so close it right after
+    if (btn === 2 && moved >= 6) requestAnimationFrame(() => {
+      const M = globalThis.App && globalThis.App.menuContext; if (M) M.hide();
+    });
   });
   addEventListener('wheel', () => { flight = null; }, { passive: true });
   addEventListener('keydown', (e) => {

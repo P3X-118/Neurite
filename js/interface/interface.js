@@ -248,7 +248,14 @@ class Interface {
 
         document.activeElement.blur();
 
+        // fsn console (Design B): fsn owns background drags — LEFT-drag orbits the
+        // landscape (fsn-bootstrap), so Neurite's own camera-drag (pan/zoom/rotate)
+        // must not engage. Wheel-zoom and the context menu below are unaffected.
+        // Same gating pattern as nodestep.js / nodeclass.js / mandelbrot.js.
+        const fsnOwnsCamera = typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive();
+
         // Handle zooming and rotating
+        if (!fsnOwnsCamera) {
         if (
             settings.zoomClick !== "scroll" &&
             e.button === this.mouseZoomButton &&
@@ -270,6 +277,7 @@ class Interface {
             Graph.mouseDownPos_setXY();
             this.isMousePanning = true;
             e.preventDefault();
+        }
         }
 
         // Handle context menu button press

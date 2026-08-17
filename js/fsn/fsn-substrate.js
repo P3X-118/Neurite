@@ -14,7 +14,8 @@
 // Wasm assets are vendored in ./pkg (built via `wasm-pack build --target web`).
 
 import init, { FsnEmbed } from './pkg/fsn.js';
-import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow } from './fsn-docwin.js';
+import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow, docsStateJson, restoreByPath, setRemoteDocs } from './fsn-docwin.js';
+Object.assign(globalThis, { fsnDocsStateJson: docsStateJson, fsnRestoreByPath: restoreByPath, fsnSetRemoteDocs: setRemoteDocs });
 import wasmUrl from './pkg/fsn_bg.wasm?url'; // Vite: resolves to the served asset URL
 
 // Neurite world units are ~O(1) around the origin; fsn's landscape spans tens of

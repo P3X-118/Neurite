@@ -54,6 +54,7 @@ export function openDocWindow(f) {
     `<span class="dw-path">${esc(f.source)} : ${esc(f.path)}</span>` +
     `<button class="dw-fz" data-d="-1" title="smaller text" type="button">A−</button>` +
     `<button class="dw-fz" data-d="1" title="larger text" type="button">A+</button>` +
+    `<button class="dw-ret" title="retract — dock beside its tower, still in view" type="button">⇱</button>` +
     `<button class="dw-min" title="minimize — pull back to its tower" type="button">−</button>` +
     `<button class="dw-max" title="maximize / restore (ctrl+m)" type="button">⤢</button>` +
     `<button class="dw-close" title="close" type="button">✕</button>` +
@@ -70,12 +71,18 @@ export function openDocWindow(f) {
     const p = fsn.project(f.x, f.y, f.z);
     if (p) { sx = p[0] * rx + 90; sy = p[1] * ry - 120; }
   }
-  const W = 440, H = 360;
+  // Readable-by-default: room for the 78ch measure, clamped beside the panel.
+  // Inline size on DESKTOP only — the phone sheet + maximized sizes are CSS
+  // (media/class) rules that inline styles would override.
+  const mobileSheet = matchMedia('(max-width: 700px)').matches;
+  const W = mobileSheet ? 440 : Math.max(440, Math.min(700, innerWidth - 300));
+  const H = mobileSheet ? 360 : Math.max(360, Math.min(620, Math.round(innerHeight * 0.74)));
   sx = Math.max(258, Math.min(innerWidth - W - 12, sx));
-  sy = Math.max(10, Math.min(innerHeight - H - 12, sy));
+  sy = Math.max(40, Math.min(Math.max(44, innerHeight - H - 12), sy));
   el.style.left = sx + 'px';
   el.style.top = sy + 'px';
   el.style.zIndex = ++zTop;
+  if (!mobileSheet) { el.style.width = W + 'px'; el.style.height = H + 'px'; }
 
   const win = {
     el, body: el.querySelector('.dw-frame'),
@@ -85,7 +92,8 @@ export function openDocWindow(f) {
     dragging: false, maximized: false,
     home: { x: sx, y: sy },
     fontPx: 13, native: nativeView(f.name),
-    minimized: false, chip: null,
+    minimized: false, chip: null, retracted: false,
+    size: { w: W, h: H },
   };
   if (win.native) el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
   docWindows.set(id, win);
@@ -109,7 +117,7 @@ export function openDocWindow(f) {
   const bar = el.querySelector('.dw-bar');
   let dx = 0, dy = 0;
   bar.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button') || win.maximized) return;
+    if (e.target.closest('button') || win.maximized || win.retracted) return;
     win.dragging = true;
     dx = e.clientX - el.offsetLeft; dy = e.clientY - el.offsetTop;
     bar.setPointerCapture(e.pointerId);
@@ -132,6 +140,11 @@ export function openDocWindow(f) {
   }));
   el.querySelector('.dw-max').addEventListener('click', () => toggleMaximize(win));
   el.querySelector('.dw-min').addEventListener('click', () => minimizeDocWindow(win));
+  el.querySelector('.dw-ret').addEventListener('click', () => toggleRetract(win));
+  // a retracted card expands on click anywhere (buttons keep their own actions)
+  el.addEventListener('click', (e) => {
+    if (win.retracted && !e.target.closest('button')) toggleRetract(win);
+  });
   el.addEventListener('dblclick', (e) => { if (e.target.closest('.dw-bar')) toggleMaximize(win); });
   return win;
 }
@@ -182,7 +195,14 @@ export function toggleMaximize(win) {
   const before = el.getBoundingClientRect();
   win.maximized = !win.maximized;
   el.classList.toggle('maximized', win.maximized);
-  if (!win.maximized) { el.style.left = win.home.x + 'px'; el.style.top = win.home.y + 'px'; }
+  if (win.maximized) {
+    el.style.width = ''; el.style.height = ''; // the .maximized CSS sizes it
+  } else {
+    el.style.left = win.home.x + 'px'; el.style.top = win.home.y + 'px';
+    if (!matchMedia('(max-width: 700px)').matches && win.size) {
+      el.style.width = win.size.w + 'px'; el.style.height = win.size.h + 'px';
+    }
+  }
   if (reduced) return;
   const after = el.getBoundingClientRect();
   if (!after.width || !after.height) return;
@@ -230,6 +250,7 @@ function chipsLayer() {
 export function minimizeDocWindow(win) {
   if (win.minimized) return;
   if (win.maximized) toggleMaximize(win);
+  if (win.retracted) { win.retracted = false; win.el.classList.remove('retracted'); }
   win.minimized = true;
   const a = anchorScreen(win) || { x: innerWidth / 2, y: innerHeight * 0.7 };
   const r = win.el.getBoundingClientRect();
@@ -281,6 +302,111 @@ export function restoreDocWindow(win) {
   }, { duration: 0.42, ease: [0.35, 0, 0.25, 1] });
 }
 
+/** RETRACT (user-directed 2026-08-17): the document stays IN VIEW SPACE as a
+ * compact card that RIDES its tower — per-frame anchored to the file box's
+ * projection (so it is no longer locked to screen space while zooming), with a
+ * short tether. Click the card (or ⇱ again) to expand back to the floating
+ * reading window at that spot. */
+export function toggleRetract(win) {
+  if (win.minimized) return;
+  if (win.maximized) toggleMaximize(win);
+  win.retracted = !win.retracted;
+  win.el.classList.toggle('retracted', win.retracted);
+  if (!win.retracted) {
+    // expand where the card currently sits (clamped) — it stays "in view space"
+    const r = win.el.getBoundingClientRect();
+    win.home = {
+      x: Math.max(6, Math.min(innerWidth - 446, r.x)),
+      y: Math.max(40, Math.min(innerHeight - 370, r.y - 60)),
+    };
+    win.el.style.left = win.home.x + 'px';
+    win.el.style.top = win.home.y + 'px';
+    win.el.style.zIndex = ++zTop;
+    if (!reduced) animate(win.el, { opacity: [0.7, 1], scale: [0.92, 1] }, { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] });
+  }
+}
+
+/** This window's document state for the mosaic bus (8d chip mirroring). */
+export function docsStateJson() {
+  const out = [];
+  for (const w of docWindows.values()) {
+    out.push({ name: w.name, source: w.source, path: w.path,
+      a: [w.anchor.x, w.anchor.y, w.anchor.z], min: !!w.minimized });
+  }
+  return JSON.stringify(out);
+}
+
+/** Restore (or focus) MY document by path — the owner side of a cross-window
+ * chip click. */
+export function restoreByPath(path) {
+  for (const w of docWindows.values()) {
+    if (w.path !== path) continue;
+    if (w.minimized) restoreDocWindow(w);
+    else w.el.style.zIndex = ++zTop;
+    return true;
+  }
+  return false;
+}
+
+// 8d: PEERS' docked documents render as chips here too — the landscape is
+// shared, so a doc minimized to its tower in ANY window shows at that tower in
+// EVERY window. Clicking one asks the owner window to restore it.
+const remoteDocs = new Map();  // ownerId -> docs[]
+const remoteChips = new Map(); // `${owner}::${path}` -> element
+export function setRemoteDocs(owner, docs) {
+  remoteDocs.set(owner, docs || []);
+}
+function stepRemoteChips(placed) {
+  const live = new Set();
+  const peers = globalThis.fsnMosaic ? globalThis.fsnMosaic.state.windows : null;
+  const fsn = globalThis.fsnHandle && globalThis.fsnHandle();
+  const c = document.getElementById('fsn-canvas');
+  const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
+  for (const [owner, docs] of remoteDocs) {
+    if (peers && !peers.has(owner)) continue; // owner window is gone
+    for (const d of docs) {
+      if (!d.min) continue;
+      const key = owner + '::' + d.path;
+      live.add(key);
+      let chip = remoteChips.get(key);
+      if (!chip) {
+        chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'fsn-dockchip remote';
+        chip.textContent = '▤ ' + d.name;
+        chip.title = 'restore ' + d.name + ' (opens in its own window)';
+        chip.addEventListener('click', () => {
+          if (globalThis.fsnMosaic) globalThis.fsnMosaic.requestDocRestore(owner, d.path);
+        });
+        chipsLayer().appendChild(chip);
+        remoteChips.set(key, chip);
+      }
+      let a = null;
+      if (fsn && fsn.project) {
+        const pr = fsn.project(d.a[0], d.a[1], d.a[2]);
+        if (pr) a = { x: pr[0] * rx, y: pr[1] * ry };
+      }
+      if (!a) { chip.style.display = 'none'; continue; }
+      chip.style.display = '';
+      const cw = chip.offsetWidth || 120, chh = 26;
+      let x = Math.round(a.x - cw / 2), y = Math.round(a.y - 34);
+      let bumped = true;
+      while (bumped) {
+        bumped = false;
+        for (const r of placed) {
+          if (x < r.x + r.w && x + cw > r.x && y < r.y + chh && y + chh > r.y) { y = r.y + chh + 4; bumped = true; }
+        }
+      }
+      placed.push({ x, y, w: cw });
+      chip.style.left = x + 'px';
+      chip.style.top = y + 'px';
+    }
+  }
+  for (const [key, chip] of remoteChips) {
+    if (!live.has(key)) { chip.remove(); remoteChips.delete(key); }
+  }
+}
+
 /** Topmost open window (Ctrl+M target). */
 export function topDocWindow() {
   let top = null, z = -1;
@@ -321,9 +447,22 @@ export function stepDocWindows(now) {
     w.chip.style.left = x + 'px';
     w.chip.style.top = y + 'px';
   }
+  stepRemoteChips(placed); // 8d: peers' docked docs share the same towers
   for (const w of docWindows.values()) {
     if (w.minimized) {
       continue;
+    }
+    if (w.retracted) {
+      const a = anchorScreen(w);
+      if (a) {
+        w.el.style.display = '';
+        const rw = w.el.offsetWidth || 180;
+        w.el.style.left = Math.round(a.x - rw / 2) + 'px';
+        w.el.style.top = Math.round(a.y - (w.el.offsetHeight || 34) - 22) + 'px';
+      } else {
+        w.el.style.display = 'none'; // tower behind the camera
+      }
+      // fall through: the slight float rides ON TOP of the anchor tracking
     }
     if (w.dragging || w.maximized) { w.el.style.transform = ''; continue; }
     if (reduced) continue;

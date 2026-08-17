@@ -25,9 +25,11 @@ const POSE_MS = 1000;
 
 export const mosaicState = {
   id: Math.random().toString(36).slice(2, 10),
-  role: null,            // 'leader' | 'follower' | null (single-window)
+  role: null,            // 'leader' | 'follower' — DYNAMIC (8d takeover)
   windows: new Map(),    // id -> { pose, lastSeen, leader }
   channel: null,
+  relay: null,           // optional cross-machine WebSocket transport (8d seam)
+  leaderLastSeen: 0,
   seq: 0,
 };
 
@@ -79,37 +81,87 @@ export function mosaicRect() {
 /** 8b entry point (to be called from fsn-bootstrap once 8a lands):
  * joins the bus, elects a role, starts pose/beat loops, and returns hooks the
  * render loop calls each frame. All TODOs are the 8b implementation. */
-export function initMosaic({ onCamera, onWorld, onInput } = {}) {
+export function initMosaic({ onCamera, onWorld, onInput, onRole, onDocs, onDocRestore } = {}) {
   mosaicState.channel = new BroadcastChannel(CH_NAME);
-  mosaicState.role = isMosaicFollower() ? 'follower' : 'leader'; // TODO: real election + takeover
+  mosaicState.role = isMosaicFollower() ? 'follower' : 'leader';
+  mosaicState.leaderLastSeen = performance.now(); // grace at boot
   const ch = mosaicState.channel;
-  const say = (m) => ch.postMessage({ ...m, id: mosaicState.id });
-  ch.onmessage = (ev) => {
-    const m = ev.data || {};
-    if (m.id === mosaicState.id) return;
+
+  // 8d relay seam (cross-machine): mirror the bus over a WebSocket when a relay
+  // is configured (?relay=wss://… or window.FSN_MOSAIC_RELAY). Inert otherwise;
+  // the relay server itself is estate infra (a follow-up service at the origin).
+  const relayUrl = new URLSearchParams(location.search).get('relay') || globalThis.FSN_MOSAIC_RELAY || '';
+  const connectRelay = () => {
+    if (!relayUrl) return;
+    try {
+      const ws = new WebSocket(relayUrl);
+      ws.onmessage = (ev) => { try { handle(JSON.parse(ev.data)); } catch (e) {} };
+      ws.onclose = () => { mosaicState.relay = null; setTimeout(connectRelay, 3000 + Math.random() * 2000); };
+      ws.onopen = () => { mosaicState.relay = ws; };
+    } catch (e) { /* bad url — stay local */ }
+  };
+  connectRelay();
+
+  const say = (m) => {
+    const msg = { ...m, id: mosaicState.id };
+    ch.postMessage(msg);
+    if (mosaicState.relay && mosaicState.relay.readyState === 1) {
+      try { mosaicState.relay.send(JSON.stringify(msg)); } catch (e) {}
+    }
+  };
+
+  const adoptRole = (r) => {
+    if (mosaicState.role === r) return;
+    mosaicState.role = r;
+    if (onRole) onRole(r);
+    console.log('[fsn-mosaic] role ->', r);
+  };
+
+  const handle = (m) => {
+    if (!m || m.id === mosaicState.id) return;
     const w = mosaicState.windows.get(m.id) || { pose: null, lastSeen: 0, leader: false };
     w.lastSeen = performance.now();
     if (m.t === 'hello' || m.t === 'pose') w.pose = m.pose;
-    if (m.t === 'beat') w.leader = m.leader;
+    if (m.t === 'beat') {
+      w.leader = m.leader;
+      if (m.leader) {
+        mosaicState.leaderLastSeen = performance.now();
+        // two leaders (e.g. the original reopened after a takeover): LOWEST id
+        // keeps the chair, the other demotes — deterministic on every window.
+        if (mosaicState.role === 'leader' && m.id < mosaicState.id) adoptRole('follower');
+      }
+    }
     if (m.t === 'bye') { mosaicState.windows.delete(m.id); return; }
     if (m.t === 'cam' && mosaicState.role === 'follower' && onCamera) onCamera(m);
     if (m.t === 'world' && mosaicState.role === 'follower' && onWorld) onWorld(m);
-    // 8c: followers forward input INTENTS; only the leader applies them — one
-    // camera/world authority, every window reflects it (the user field report:
-    // "no synced view controls that share the same view state").
+    // 8c: followers forward input INTENTS; only the leader applies them.
     if (m.t === 'input' && mosaicState.role === 'leader' && onInput) onInput(m);
+    // 8d: every window shares its document state; chips render everywhere.
+    if (m.t === 'docs' && onDocs) onDocs(m.id, m.docs || []);
+    if (m.t === 'docrestore' && m.owner === mosaicState.id && onDocRestore) onDocRestore(m.path);
     mosaicState.windows.set(m.id, w);
   };
+  ch.onmessage = (ev) => handle(ev.data || {});
+
   say({ t: 'hello', pose: windowPose() });
   setInterval(() => say({ t: 'pose', pose: windowPose() }), POSE_MS);
   setInterval(() => {
     say({ t: 'beat', leader: mosaicState.role === 'leader' });
     const dead = performance.now() - 3 * BEAT_MS;
     for (const [id, w] of mosaicState.windows) if (w.lastSeen < dead) mosaicState.windows.delete(id);
-    // TODO 8b: leader takeover when the leader's beat goes silent.
+    // 8d TAKEOVER: the leader's beat has gone silent — the lowest live id
+    // promotes (deterministic, no coordination needed).
+    if (mosaicState.role === 'follower' && performance.now() - mosaicState.leaderLastSeen > 3 * BEAT_MS) {
+      const liveIds = [mosaicState.id, ...[...mosaicState.windows.entries()]
+        .filter(([, w2]) => !w2.leader).map(([id2]) => id2)].sort();
+      if (liveIds[0] === mosaicState.id) {
+        adoptRole('leader');
+        mosaicState.leaderLastSeen = performance.now();
+      }
+    }
   }, BEAT_MS);
   addEventListener('beforeunload', () => say({ t: 'bye' }));
-  return {
+  const api = {
     /** Leader: broadcast the camera each frame (throttle upstream). */
     broadcastCamera(pan, zoom, yaw, pitch) {
       if (mosaicState.role !== 'leader') return;
@@ -126,12 +178,20 @@ export function initMosaic({ onCamera, onWorld, onInput } = {}) {
       if (mosaicState.role !== 'follower') return;
       say({ t: 'input', ...payload });
     },
+    /** Any window: share this window's document state (8d chip mirroring). */
+    broadcastDocs(docs) { say({ t: 'docs', docs }); },
+    /** Any window: ask the OWNER window to restore a docked document. */
+    requestDocRestore(owner, path) { say({ t: 'docrestore', owner, path }); },
     /** Both roles: push this window's sub-rect into the embed (8a API). */
     applyMosaicRect(fsn) {
       const r = mosaicRect();
       if (fsn && fsn.set_mosaic_rect) fsn.set_mosaic_rect(r.x, r.y, r.w, r.h);
     },
   };
+  // expose the live api on the probe bridge too — dock-chip handlers (and any
+  // console chrome) reach it via globalThis.fsnMosaic, not the bootstrap's var
+  if (globalThis.fsnMosaic) Object.assign(globalThis.fsnMosaic, api);
+  return api;
 }
 
 // Probe/debug bridge (also used by the verification suite).
@@ -139,10 +199,18 @@ if (typeof globalThis !== 'undefined') {
   globalThis.fsnMosaic = { state: mosaicState, windowPose, virtualCanvas, mosaicRect, openFollowerWindow, isMosaicFollower };
 }
 
-/** Console affordance (8b): open a pre-positioned follower window. */
-export function openFollowerWindow() {
+/** Console affordance: open a pre-positioned follower window. With the Window
+ * Management API (Chromium; permission-prompted) the follower FILLS the next
+ * screen; otherwise a best-effort placement to the right of this window. */
+export async function openFollowerWindow() {
   const p = windowPose();
-  // Best-effort placement to the right; WM API (8c) makes this exact per-screen.
-  window.open(`${location.pathname}?mosaic=follower`, '_blank',
-    `popup=yes,left=${p.x + p.w + 16},top=${p.y},width=${p.w},height=${p.h}`);
+  let feat = `popup=yes,left=${p.x + p.w + 16},top=${p.y},width=${p.w},height=${p.h}`;
+  try {
+    if ('getScreenDetails' in window) {
+      const d = await window.getScreenDetails();
+      const other = d.screens.find((sc) => sc !== d.currentScreen);
+      if (other) feat = `popup=yes,left=${other.availLeft},top=${other.availTop},width=${other.availWidth},height=${other.availHeight}`;
+    }
+  } catch (e) { /* permission declined — heuristic placement stands */ }
+  window.open(`${location.pathname}?mosaic=follower`, '_blank', feat);
 }

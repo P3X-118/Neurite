@@ -977,3 +977,28 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
   content: "\25CF"; margin-left: 6px; font-size: 8px; color: #17b08c;
   text-shadow: 0 0 5px rgba(23, 176, 140, 0.8);
 }
+
+/* Peers docked docs (8d): same chip, dashed border marks "lives in another window". */
+.fsn-dockchip.remote { border-style: dashed; opacity: 0.85; }
+
+/* RETRACTED documents: a compact card riding its tower (anchor-tracked per
+   frame, short tether). Click to expand back into the reading window. */
+.fsn-docwin.retracted {
+  width: auto !important; min-width: 130px; max-width: 240px; height: auto !important;
+  cursor: pointer; opacity: 0.94;
+  border-top-width: 1px; box-shadow: 0 3px 18px rgba(0, 0, 0, 0.5), 0 0 10px rgba(23, 176, 140, 0.25);
+}
+.fsn-docwin.retracted .dw-frame,
+.fsn-docwin.retracted .dw-fz,
+.fsn-docwin.retracted .dw-min,
+.fsn-docwin.retracted .dw-max,
+.fsn-docwin.retracted .dw-path { display: none; }
+.fsn-docwin.retracted .dw-bar { cursor: pointer; padding: 4px 8px; }
+.fsn-docwin.retracted .dw-ret { display: none; }
+.fsn-docwin.retracted:hover { opacity: 1; }
+/* the small bar buttons share sizing */
+.dw-ret { min-width: 28px; height: 24px; cursor: pointer;
+  background: rgba(95, 230, 208, 0.08); color: #9ff3e0;
+  border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
+  font: 12px "Courier New", monospace; }
+.dw-ret:hover { background: rgba(95, 230, 208, 0.22); }

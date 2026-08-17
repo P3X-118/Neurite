@@ -39,6 +39,7 @@ export async function bootFsnSubstrate() {
   // Stage 8: an auxiliary mosaic window renders the landscape only — the
   // console chrome hides (CSS on html.fsn-follower); the leader keeps the panel.
   if (isMosaicFollower()) document.documentElement.classList.add('fsn-follower');
+  // (the mosaic onRole callback keeps this class in sync after takeovers)
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const canvas = document.createElement('canvas');
@@ -94,10 +95,24 @@ export async function bootFsnSubstrate() {
   // sub-rect of the union desktop area (fsnMosaic.mosaicRect -> set_mosaic_rect).
   let lastBoardSent = -1;
   let lastPathSent = '';
+  let lastDocsSent = '';
   const activeBoardIdx = () =>
     [...document.querySelectorAll('#board-rows .board-row')].findIndex((r) => r.classList.contains('active'));
-  const follower = isMosaicFollower();
+  // 8d: the role is DYNAMIC (leader takeover) — consult it live, never capture.
+  const isFol = () => (globalThis.fsnMosaic && globalThis.fsnMosaic.state.role) === 'follower';
   const mosaic = initMosaic({
+    onRole: (r) => {
+      // promotion grows the console chrome; demotion hides it again
+      document.documentElement.classList.toggle('fsn-follower', r === 'follower');
+    },
+    onDocs: (owner, docs) => {
+      const dw = globalThis.fsnSetRemoteDocs;
+      if (dw) dw(owner, docs);
+    },
+    onDocRestore: (path) => {
+      const r = globalThis.fsnRestoreByPath;
+      if (r) r(path);
+    },
     onCamera: (m) => {
       const G = globalThis.Graph, h = fsnHandle();
       if (!G || !h) return;
@@ -149,6 +164,9 @@ export async function bootFsnSubstrate() {
           lastBoardSent = b; lastPathSent = cp;
           mosaic.broadcastWorld(b, cp);
         }
+        // 8d: share this window's document state when it changes (chips mirror)
+        const dsj = globalThis.fsnDocsStateJson ? globalThis.fsnDocsStateJson() : '';
+        if (dsj && dsj !== lastDocsSent) { lastDocsSent = dsj; mosaic.broadcastDocs(JSON.parse(dsj)); }
       }
     }
     fsnStep(dt);
@@ -189,6 +207,11 @@ export async function bootFsnSubstrate() {
     if (e.button !== 0 && e.button !== 2) return;
     if (!isBackground(e.target)) return;
     bgPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Drag-THROUGH (user-directed 2026-08-17): capture the pointer on the
+    // background element so the orbit keeps receiving events even when the
+    // drag crosses an open document window — iframes otherwise swallow the
+    // pointer stream and the motion stalls mid-gesture.
+    try { e.target.setPointerCapture(e.pointerId); } catch (err) { /* non-element target */ }
     if (bgPointers.size === 2) { // second finger: orbit ends, pinch begins
       orbiting = false;
       const [a, b] = [...bgPointers.values()];
@@ -206,14 +229,14 @@ export async function bootFsnSubstrate() {
       const [a, b] = [...bgPointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       if (d > 20 && pinch.d0 > 20) {
-        if (follower) mosaic.sendInput({ kind: 'zoom', factor: pinch.d0 / d });
+        if (isFol()) mosaic.sendInput({ kind: 'zoom', factor: pinch.d0 / d });
         else zoomAtPoint((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.d0 / d);
         pinch.d0 = d;
       }
       return;
     }
     if (!orbiting) return;
-    if (follower) mosaic.sendInput({ kind: 'orbit', dx: (e.clientX - lx) * dpr, dy: (e.clientY - ly) * dpr });
+    if (isFol()) mosaic.sendInput({ kind: 'orbit', dx: (e.clientX - lx) * dpr, dy: (e.clientY - ly) * dpr });
     else fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
     lx = e.clientX; ly = e.clientY;
     // displacement from the PRESS (not summed jitter — a wobbly click stays a click)
@@ -242,7 +265,7 @@ export async function bootFsnSubstrate() {
         // the second click. openAt cancels this on open/descend.
         clearTimeout(pendingFileZoom);
         pendingFileZoom = setTimeout(() => {
-          if (follower) mosaic.sendInput({ kind: 'flyTo', i });
+          if (isFol()) mosaic.sendInput({ kind: 'flyTo', i });
           else flyToPedestal(i);
         }, 280);
       } else if (h && h.pick_file_at && e.detail < 2) {
@@ -255,7 +278,7 @@ export async function bootFsnSubstrate() {
             const f = JSON.parse(fj);
             clearTimeout(pendingFileZoom);
             pendingFileZoom = setTimeout(() => {
-              if (follower) mosaic.sendInput({ kind: 'flyPan', tp: fsnWorldToPan(f.x, f.z), tz: 0.18 });
+              if (isFol()) mosaic.sendInput({ kind: 'flyPan', tp: fsnWorldToPan(f.x, f.z), tz: 0.18 });
               else flyPanTo(fsnWorldToPan(f.x, f.z), 0.18);
             }, 280);
           } catch (err) { /* unparseable pick — ignore */ }
@@ -268,15 +291,13 @@ export async function bootFsnSubstrate() {
       const M = globalThis.App && globalThis.App.menuContext; if (M) M.hide();
     });
   });
-  if (follower) {
-    // Neurite's svg wheel handler would zoom THIS window's local Graph (then be
-    // stomped by the leader broadcast = dead-feeling wheel). Capture it first
-    // and forward the intent instead.
-    addEventListener('wheel', (e) => {
-      e.stopPropagation();
-      mosaic.sendInput({ kind: 'zoom', factor: Math.exp(e.deltaY * 0.0009) });
-    }, { capture: true, passive: true });
-  }
+  // Followers forward wheel-zoom (Neurite's local zoom + the broadcast stomp
+  // feels dead). Registered ALWAYS, gated by LIVE role — takeover flips it.
+  addEventListener('wheel', (e) => {
+    if (!isFol()) return;
+    e.stopPropagation();
+    mosaic.sendInput({ kind: 'zoom', factor: Math.exp(e.deltaY * 0.0009) });
+  }, { capture: true, passive: true });
   addEventListener('wheel', () => { flight = null; }, { passive: true });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !fsnInConstruct() && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {
@@ -303,7 +324,7 @@ export async function bootFsnSubstrate() {
     const path = fsnDescendAt(x, y, dpr);
     if (path) {
       recenter();
-      if (follower) mosaic.sendInput({ kind: 'enterPath', path }); // 8c: all windows descend
+      if (isFol()) mosaic.sendInput({ kind: 'enterPath', path }); // 8c: all windows descend
       console.log('[fsn] descended ->', path);
       return true;
     }
@@ -336,7 +357,7 @@ export async function bootFsnSubstrate() {
       const path = fsnAscend(); // embed: console root re-builds the LANDSCAPE
       if (path) {
         e.preventDefault(); recenter();
-        if (follower) mosaic.sendInput({ kind: 'enterPath', path });
+        if (isFol()) mosaic.sendInput({ kind: 'enterPath', path });
         console.log('[fsn] ascended ->', path);
       }
     }

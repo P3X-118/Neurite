@@ -921,3 +921,13 @@ body.panel-collapsed #panel-collapse { left: 0; }
   border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
   font: 10px "Courier New", monospace; }
 .dw-fz:hover { background: rgba(95, 230, 208, 0.22); }
+
+/* Phones: document windows are full reading sheets (the panel is off-canvas,
+   so the sheet takes the viewport); maximized ignores the desktop panel inset. */
+@media (max-width: 700px) {
+  .fsn-docwin { width: calc(100vw - 12px); height: 70vh; }
+  .fsn-docwin.maximized {
+    left: 6px !important; top: 6px !important;
+    width: calc(100vw - 12px); height: calc(100vh - 12px); height: calc(100dvh - 12px);
+  }
+}

@@ -73,3 +73,9 @@ html.fsn-construct body::before {
    #dropdowndiv is the main Neurite menu — the "confusing UX menu" of the
    2026-08-14 regression. Node windows/modals/context menu stay (the engine). */
 html.irix #dropdowndiv { display: none !important; }
+
+/* Touch: the background svg is the gesture surface (one-finger orbit, pinch
+   zoom, taps) — without touch-action none the browser pans/zooms the PAGE
+   instead of delivering pointer events. The console panel keeps native touch
+   scrolling; only the scene surfaces opt out. */
+html.irix #svg_bg { touch-action: none; }

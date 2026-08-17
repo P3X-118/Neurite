@@ -417,6 +417,13 @@ On.touchmove(svg, (e) => {
         });
     }
 
+    // fsn console (Design B): fsn owns background touch — one finger orbits,
+    // two fingers pinch-zoom (fsn-bootstrap pointer handlers). Neurite's own
+    // touch pan/pinch must not also run (its one-finger pan dragged the world
+    // during orbit; its pinch zoom exactly cancelled fsn's). Same gate as
+    // onMouseDown / nodestep / mandelbrot.
+    if (typeof window !== 'undefined' && window.isFsnActive && window.isFsnActive()) return;
+
     switch (touches.size) {
         case 1: {
             Autopilot.stop();

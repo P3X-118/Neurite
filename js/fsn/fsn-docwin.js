@@ -91,6 +91,14 @@ export function openDocWindow(f) {
   docWindows.set(id, win);
   loadContent(win);
 
+  // Phones: a 440px floating window can't float on a 375px viewport — open as a
+  // full reading sheet (standalone mobile-reader parity). − still docks it to
+  // the tower; ⤢ toggles back to the sheet.
+  if (matchMedia('(max-width: 700px)').matches) {
+    win.maximized = true;
+    el.classList.add('maximized');
+  }
+
   // entrance (the reader's own motion language)
   if (!reduced) animate(el, { opacity: [0, 1], scale: [0.94, 1], y: [12, 0] }, { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] });
 
@@ -267,18 +275,33 @@ export function topDocWindow() {
  * maximized, or reduced-motion. Returns screen anchor points for the tethers. */
 export function stepDocWindows(now) {
   globalThis.__fsnDocSteps = (globalThis.__fsnDocSteps || 0) + 1; // liveness (debug)
+  // Dock chips: position at each doc's file-box anchor, then CLUSTER — several
+  // docs from one folder project nearly on top of each other; overlapping chips
+  // stack downward so every one stays readable and clickable.
+  const placed = [];
   for (const w of docWindows.values()) {
-    if (w.minimized) { // dock chip rides its tower (tracks orbit/zoom per frame)
-      if (w.chip) {
-        const a = anchorScreen(w);
-        if (a) {
-          w.chip.style.display = '';
-          w.chip.style.left = Math.round(a.x - w.chip.offsetWidth / 2) + 'px';
-          w.chip.style.top = Math.round(a.y - 34) + 'px';
-        } else {
-          w.chip.style.display = 'none'; // anchor behind the camera
+    if (!w.minimized || !w.chip) continue;
+    const a = anchorScreen(w);
+    if (!a) { w.chip.style.display = 'none'; continue; }
+    w.chip.style.display = '';
+    const cw = w.chip.offsetWidth || 120, chh = 26;
+    let x = Math.round(a.x - cw / 2), y = Math.round(a.y - 34);
+    let bumped = true;
+    while (bumped) {
+      bumped = false;
+      for (const r of placed) {
+        if (x < r.x + r.w && x + cw > r.x && y < r.y + chh && y + chh > r.y) {
+          y = r.y + chh + 4; // stack below the occupying chip
+          bumped = true;
         }
       }
+    }
+    placed.push({ x, y, w: cw });
+    w.chip.style.left = x + 'px';
+    w.chip.style.top = y + 'px';
+  }
+  for (const w of docWindows.values()) {
+    if (w.minimized) {
       continue;
     }
     if (w.dragging || w.maximized) { w.el.style.transform = ''; continue; }

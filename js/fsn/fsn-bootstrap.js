@@ -148,28 +148,68 @@ export async function bootFsnSubstrate() {
   const isBackground = (t) => t === canvas || (t && t.id === 'svg_bg') || t === document.body;
   let orbiting = false, btn = 0, moved = 0, px0 = 0, py0 = 0, lx = 0, ly = 0;
   let pendingFileZoom = 0; // single-click file-zoom, cancelled by dblclick-open
+  // TOUCH: pointers on the background are tracked for gestures — one finger
+  // orbits (same path as mouse drag), TWO fingers pinch-zoom the z-camera at
+  // the pinch midpoint (the phone's wheel). Mouse buttons flow through the
+  // same handlers (pointer events unify them).
+  const bgPointers = new Map(); // pointerId -> {x, y}
+  let pinch = null;             // { d0 } while two background pointers are down
+  const zoomAtPoint = (cx, cy, factor) => {
+    const G = globalThis.Graph;
+    if (!G || !G.xyToZ) return;
+    const z = G.xyToZ(cx, cy);
+    // keep the z under the fingers fixed: pan' = z + (pan - z) * factor
+    G.zoom.x *= factor; G.zoom.y *= factor;
+    G.pan.x = z.x + (G.pan.x - z.x) * factor;
+    G.pan.y = z.y + (G.pan.y - z.y) * factor;
+  };
   addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.button !== 2) return;
     if (!isBackground(e.target)) return;
+    bgPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (bgPointers.size === 2) { // second finger: orbit ends, pinch begins
+      orbiting = false;
+      const [a, b] = [...bgPointers.values()];
+      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) };
+      flight = null;
+      return;
+    }
     orbiting = true; btn = e.button; moved = 0;
     px0 = lx = e.clientX; py0 = ly = e.clientY;
     flight = null; // user input interrupts a camera flight
   });
   addEventListener('pointermove', (e) => {
+    if (bgPointers.has(e.pointerId)) bgPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && bgPointers.size >= 2) {
+      const [a, b] = [...bgPointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d > 20 && pinch.d0 > 20) {
+        zoomAtPoint((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.d0 / d);
+        pinch.d0 = d;
+      }
+      return;
+    }
     if (!orbiting) return;
     fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
     lx = e.clientX; ly = e.clientY;
     // displacement from the PRESS (not summed jitter — a wobbly click stays a click)
     moved = Math.max(moved, Math.hypot(e.clientX - px0, e.clientY - py0));
   });
+  const endPointer = (e) => {
+    bgPointers.delete(e.pointerId);
+    if (bgPointers.size < 2) pinch = null;
+  };
+  addEventListener('pointercancel', endPointer);
   addEventListener('pointerup', (e) => {
+    endPointer(e);
     if (!orbiting) return;
     orbiting = false;
     // a left press that never really moved is a CLICK → fly to what's under it:
     // a directory pedestal flies to the dir; a FILE zooms in close on the file
     // (user-directed 2026-08-16: "single clicking on files should zoom them to
     // view"). Double-click still OPENS the file as a document window.
-    if (btn === 0 && moved < 6) {
+    // Fingers wobble more than mice — a looser tap tolerance on touch.
+    if (btn === 0 && moved < (e.pointerType === 'touch' ? 12 : 6)) {
       const h = fsnHandle();
       const i = h && h.pick_at ? h.pick_at(e.clientX * dpr, e.clientY * dpr) : -1;
       if (i >= 0) {
@@ -213,12 +253,35 @@ export async function bootFsnSubstrate() {
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && fsnInConstruct()) { e.preventDefault(); e.stopPropagation(); fsnExitConstruct(); }
   }, true);
-  addEventListener('dblclick', (e) => {
-    clearTimeout(pendingFileZoom); // the double-click OPENS — don't also fly
-    const path = fsnDescendAt(e.clientX, e.clientY, dpr);
-    if (path) { recenter(); console.log('[fsn] descended ->', path); return; }
-    const fileJson = fsnPickFileAt(e.clientX, e.clientY, dpr);
-    if (fileJson) { fsnBloomFile(fileJson); console.log('[fsn] bloomed', fileJson); }
+  // The OPEN gesture (mouse double-click AND touch double-tap): a floor descends,
+  // a file opens as a document window.
+  const openAt = (x, y) => {
+    clearTimeout(pendingFileZoom); // opening — don't also fly
+    const path = fsnDescendAt(x, y, dpr);
+    if (path) { recenter(); console.log('[fsn] descended ->', path); return true; }
+    const fileJson = fsnPickFileAt(x, y, dpr);
+    if (fileJson) { fsnBloomFile(fileJson); console.log('[fsn] bloomed', fileJson); return true; }
+    return false;
+  };
+  addEventListener('dblclick', (e) => { openAt(e.clientX, e.clientY); });
+  // Touch DOUBLE-TAP = the same open gesture (browsers don't synthesize dblclick
+  // once touch-action is none). Window-level like the dblclick listener — a tap
+  // often lands on a LABEL chip riding the file box, not the background — with
+  // console UI surfaces excluded (they own their tap semantics).
+  let lastTap = { t: 0, x: 0, y: 0 };
+  addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch') return;
+    if (e.target && e.target.closest && e.target.closest('#tree, .fsn-docwin, .fsn-dockchip, #reader, #ctxmenu, #login, button, input')) {
+      lastTap.t = 0;
+      return;
+    }
+    const now = performance.now();
+    if (now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+      lastTap = { t: 0, x: 0, y: 0 };
+      openAt(e.clientX, e.clientY);
+      return;
+    }
+    lastTap = { t: now, x: e.clientX, y: e.clientY };
   });
   addEventListener('keydown', (e) => {
     if (e.key === 'Backspace' && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {

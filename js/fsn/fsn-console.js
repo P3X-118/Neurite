@@ -85,6 +85,20 @@ function wireChrome() {
     try { frame.contentDocument?.addEventListener('keydown', onCtrlM); } catch {}
   });
 
+  // ---- THE TOP BAR (user-directed 2026-08-17): a thin cooey.club-style chrome
+  // strip. The floating SIGN IN / EXPAND VIEW buttons overlapped maximized
+  // document toolbars — they now live IN the bar, and maximized windows start
+  // below it. Seamless with the cooey surface family.
+  const bar = document.createElement('header');
+  bar.id = 'fsn-topbar';
+  bar.innerHTML = `<span class="tb-brand">jp.cooey.club <span class="tb-sep">//</span> FILE SYSTEM NAVIGATOR</span><span class="tb-fill"></span>`;
+  document.body.appendChild(bar);
+  // adopt the existing controls into the bar (handlers stay bound)
+  const adopt = (id) => { const el = document.getElementById(id); if (el) { el.classList.add('tb-item'); bar.appendChild(el); } };
+  adopt('panel-toggle'); // mobile ☰ leads the bar
+  bar.appendChild(bar.querySelector('.tb-brand')); // brand after ☰
+  bar.appendChild(bar.querySelector('.tb-fill'));
+
   // ---- navigator motion (user-directed 2026-08-16): more screen space for
   // documents. The whole panel retracts behind an edge tab, and tree folders
   // expand/retract — both motion-animated, reduced-motion aware. ----
@@ -154,6 +168,23 @@ function wireChrome() {
   if (rowsBox) {
     decorate();
     new MutationObserver(() => decorate()).observe(rowsBox, { childList: true });
+
+    // Tree ↔ Neurite-view sync (user-directed 2026-08-17): clicking a FILE row
+    // opens the SAME tethered document window as double-clicking its box in the
+    // 3D scene — not the legacy full-screen reader. Capture phase so the Rust
+    // panel's own click handler (reader) never fires when we take it. Files
+    // without a box in the current scene fall through to the reader.
+    rowsBox.addEventListener('click', (e) => {
+      const row = e.target.closest && e.target.closest('.row.file');
+      if (!row || !row.dataset) return;
+      const h = globalThis.fsnHandle && globalThis.fsnHandle();
+      if (!h || !h.find_file || !globalThis.fsnBloomFile) return;
+      const hit = h.find_file(row.dataset.source || '', row.dataset.path || '');
+      if (!hit) return; // not in the scene — legacy reader handles it
+      e.stopPropagation();
+      e.preventDefault();
+      globalThis.fsnBloomFile(hit);
+    }, true);
   }
 
   // Stage 8 mosaic: "expand view" opens an auxiliary window that tiles into the
@@ -164,5 +195,8 @@ function wireChrome() {
   ex.textContent = '⧉ expand view';
   ex.title = 'Open another window that extends this landscape (drag it to a second screen)';
   ex.addEventListener('click', () => { if (globalThis.fsnMosaic) globalThis.fsnMosaic.openFollowerWindow(); });
-  document.body.appendChild(ex);
+  ex.classList.add('tb-item');
+  bar.appendChild(ex);
+  const sb = document.getElementById('session-btn');
+  if (sb) { sb.classList.add('tb-item'); bar.appendChild(sb); }
 }

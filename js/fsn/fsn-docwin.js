@@ -90,6 +90,7 @@ export function openDocWindow(f) {
   if (win.native) el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
   docWindows.set(id, win);
   loadContent(win);
+  markRow(win, true); // tree shows what's open
 
   // Phones: a 440px floating window can't float on a 375px viewport — open as a
   // full reading sheet (standalone mobile-reader parity). − still docks it to
@@ -139,7 +140,16 @@ async function loadContent(win) {
   const fsn = globalThis.fsnHandle && globalThis.fsnHandle();
   const url = fsn && fsn.raw_url ? fsn.raw_url(win.source, win.path) : '';
   if (!url) { win.body.srcdoc = textDoc(win.name, '(this file’s source isn’t reachable right now)'); return; }
-  if (nativeView(win.name)) { win.body.src = url; return; } // browser-native: PDF viewer, images, media
+  if (nativeView(win.name)) {
+    // A sandboxed iframe DISABLES Chrome's built-in PDF viewer (plugins are off
+    // in sandboxes) — PDFs showed nothing (user-reported 2026-08-17). Native
+    // views are our own same-origin corpus files: drop the sandbox for them;
+    // srcdoc text keeps it. (Sandbox changes only apply on the next load, so
+    // remove BEFORE setting src.)
+    win.body.removeAttribute('sandbox');
+    win.body.src = url;
+    return;
+  }
   try {
     const r = await fetch(url);
     const text = await r.text();
@@ -160,6 +170,7 @@ export function closeDocWindow(id) {
   const win = docWindows.get(id);
   if (!win) return;
   docWindows.delete(id);
+  markRow(win, false);
   if (win.chip) win.chip.remove();
   if (reduced) { win.el.remove(); return; }
   animateThen(win.el, { opacity: [1, 0], scale: [1, 0.95] }, { duration: 0.16 }, () => win.el.remove());
@@ -191,6 +202,16 @@ function anchorScreen(win) {
   const c = document.getElementById('fsn-canvas');
   const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
   return { x: p[0] * rx, y: p[1] * ry };
+}
+
+/** Mark/unmark the panel row for an open document (tree ↔ view sync). */
+function markRow(win, open) {
+  for (const row of document.querySelectorAll('#tree-rows .row.file')) {
+    if (row.dataset.source === win.source && row.dataset.path === win.path) {
+      row.classList.toggle('row-open', open);
+      return;
+    }
+  }
 }
 
 function chipsLayer() {

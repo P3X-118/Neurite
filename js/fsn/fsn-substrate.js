@@ -154,7 +154,19 @@ export function fsnDescendAt(px, py, dpr = 1) {
   if (!fsn || !fsn.pick_at) return '';
   const i = fsn.pick_at(px * dpr, py * dpr);
   if (i < 1) return '';
-  return fsn.descend(i);
+  // The console shows the balloon LANDSCAPE, where pedestal i is a depth-first
+  // tree position — NOT child i-1 of the current dir, which is what descend(i)
+  // (tower semantics) assumes; it silently returned "" there. Panel rows are
+  // index-aligned with pedestals, so descend by the row's PATH via enter_path.
+  // dir rows carry data-index = the pedestal index (file rows interleave in
+  // #tree-rows, so ordinal position does NOT align — that broke descend)
+  const row = document.querySelector('#tree-rows .row[data-index="' + i + '"]');
+  const path = row && row.dataset ? row.dataset.path || '' : '';
+  if (path && path !== '/' && fsn.enter_path) {
+    const r = fsn.enter_path(path);
+    if (r) return r;
+  }
+  return fsn.descend(i); // tower-mode fallback (embed demo / non-console)
 }
 export function fsnAscend() { return fsn && fsn.ascend ? fsn.ascend() : ''; }
 export function fsnCurrentPath() { return fsn && fsn.current_path ? fsn.current_path() : ''; }

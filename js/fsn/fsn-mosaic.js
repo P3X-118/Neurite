@@ -79,7 +79,7 @@ export function mosaicRect() {
 /** 8b entry point (to be called from fsn-bootstrap once 8a lands):
  * joins the bus, elects a role, starts pose/beat loops, and returns hooks the
  * render loop calls each frame. All TODOs are the 8b implementation. */
-export function initMosaic({ onCamera, onWorld } = {}) {
+export function initMosaic({ onCamera, onWorld, onInput } = {}) {
   mosaicState.channel = new BroadcastChannel(CH_NAME);
   mosaicState.role = isMosaicFollower() ? 'follower' : 'leader'; // TODO: real election + takeover
   const ch = mosaicState.channel;
@@ -94,6 +94,10 @@ export function initMosaic({ onCamera, onWorld } = {}) {
     if (m.t === 'bye') { mosaicState.windows.delete(m.id); return; }
     if (m.t === 'cam' && mosaicState.role === 'follower' && onCamera) onCamera(m);
     if (m.t === 'world' && mosaicState.role === 'follower' && onWorld) onWorld(m);
+    // 8c: followers forward input INTENTS; only the leader applies them — one
+    // camera/world authority, every window reflects it (the user field report:
+    // "no synced view controls that share the same view state").
+    if (m.t === 'input' && mosaicState.role === 'leader' && onInput) onInput(m);
     mosaicState.windows.set(m.id, w);
   };
   say({ t: 'hello', pose: windowPose() });
@@ -112,10 +116,15 @@ export function initMosaic({ onCamera, onWorld } = {}) {
       mosaicState.seq++;
       say({ t: 'cam', pan, zoom, yaw, pitch, seq: mosaicState.seq });
     },
-    /** Leader: broadcast world state (active board) on change. */
-    broadcastWorld(board) {
+    /** Leader: broadcast world state (board + descent path) on change. */
+    broadcastWorld(board, curPath) {
       if (mosaicState.role !== 'leader') return;
-      say({ t: 'world', board });
+      say({ t: 'world', board, curPath });
+    },
+    /** Follower: forward an input intent to the leader. */
+    sendInput(payload) {
+      if (mosaicState.role !== 'follower') return;
+      say({ t: 'input', ...payload });
     },
     /** Both roles: push this window's sub-rect into the embed (8a API). */
     applyMosaicRect(fsn) {

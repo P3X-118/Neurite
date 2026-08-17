@@ -116,6 +116,53 @@ export class FsnEmbed {
         }
     }
     /**
+     * Re-root the scene onto an ARBITRARY directory path (mosaic 8c: followers
+     * converge on the leader's `cur_path`). Returns the new path, "" if the path
+     * isn't in the tree or is locked. No-op (returns the path) when already there.
+     * @param {string} path
+     * @returns {string}
+     */
+    enter_path(path) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ptr0 = passStringToWasm0(path, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.fsnembed_enter_path(this.__wbg_ptr, ptr0, len0);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Find a file IN THE CURRENT SCENE by identity — same JSON as `pick_file_at`
+     * (`{name,path,source,x,y,z}` with the box's world center as the tether
+     * anchor), or "" when the file has no box in view. The console's tree
+     * panel uses this so clicking a FILE ROW opens the same tethered document
+     * window as double-clicking its box in the 3D scene.
+     * @param {string} source
+     * @param {string} path
+     * @returns {string}
+     */
+    find_file(source, path) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(path, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len1 = WASM_VECTOR_LEN;
+            const ret = wasm.fsnembed_find_file(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            deferred3_0 = ret[0];
+            deferred3_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Fly the camera to pedestal `i` (the fsn descend animation).
      * @param {number} i
      */

@@ -93,8 +93,10 @@ export async function bootFsnSubstrate() {
   // + board; followers adopt them and every window renders its own off-axis
   // sub-rect of the union desktop area (fsnMosaic.mosaicRect -> set_mosaic_rect).
   let lastBoardSent = -1;
+  let lastPathSent = '';
   const activeBoardIdx = () =>
     [...document.querySelectorAll('#board-rows .board-row')].findIndex((r) => r.classList.contains('active'));
+  const follower = isMosaicFollower();
   const mosaic = initMosaic({
     onCamera: (m) => {
       const G = globalThis.Graph, h = fsnHandle();
@@ -105,7 +107,23 @@ export async function bootFsnSubstrate() {
     },
     onWorld: (m) => {
       const h = fsnHandle();
-      if (h && h.switch_board && m.board >= 0 && m.board !== activeBoardIdx()) h.switch_board(m.board);
+      if (!h) return;
+      if (h.switch_board && m.board >= 0 && m.board !== activeBoardIdx()) h.switch_board(m.board);
+      // 8c: converge on the leader's descent path (embed: root = the landscape)
+      if (m.curPath && h.enter_path && h.current_path && m.curPath !== h.current_path()) {
+        h.enter_path(m.curPath);
+      }
+    },
+    // 8c: the LEADER applies followers' input intents to the single authority;
+    // the per-frame camera/world broadcasts reflect them back to every window.
+    onInput: (m) => {
+      const G = globalThis.Graph, h = fsnHandle();
+      if (!G || !h) return;
+      if (m.kind === 'orbit') fsnOrbit(m.dx, m.dy);
+      else if (m.kind === 'zoom' && m.factor > 0) { G.zoom.x *= m.factor; G.zoom.y *= m.factor; flight = null; }
+      else if (m.kind === 'flyTo') flyToPedestal(m.i);
+      else if (m.kind === 'flyPan' && m.tp) flyPanTo(m.tp, m.tz || 0.45);
+      else if (m.kind === 'enterPath' && m.path && h.enter_path) { h.enter_path(m.path); recenter(); }
     },
   });
   const loop = (now) => {
@@ -126,7 +144,11 @@ export async function bootFsnSubstrate() {
           mosaic.broadcastCamera({ x: G.pan.x, y: G.pan.y }, { x: G.zoom.x, y: G.zoom.y }, yaw, pitch);
         }
         const b = activeBoardIdx();
-        if (b !== lastBoardSent && b >= 0) { lastBoardSent = b; mosaic.broadcastWorld(b); }
+        const cp = h.current_path ? h.current_path() : '';
+        if ((b !== lastBoardSent && b >= 0) || cp !== lastPathSent) {
+          lastBoardSent = b; lastPathSent = cp;
+          mosaic.broadcastWorld(b, cp);
+        }
       }
     }
     fsnStep(dt);
@@ -184,13 +206,15 @@ export async function bootFsnSubstrate() {
       const [a, b] = [...bgPointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       if (d > 20 && pinch.d0 > 20) {
-        zoomAtPoint((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.d0 / d);
+        if (follower) mosaic.sendInput({ kind: 'zoom', factor: pinch.d0 / d });
+        else zoomAtPoint((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.d0 / d);
         pinch.d0 = d;
       }
       return;
     }
     if (!orbiting) return;
-    fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
+    if (follower) mosaic.sendInput({ kind: 'orbit', dx: (e.clientX - lx) * dpr, dy: (e.clientY - ly) * dpr });
+    else fsnOrbit((e.clientX - lx) * dpr, (e.clientY - ly) * dpr);
     lx = e.clientX; ly = e.clientY;
     // displacement from the PRESS (not summed jitter — a wobbly click stays a click)
     moved = Math.max(moved, Math.hypot(e.clientX - px0, e.clientY - py0));
@@ -212,8 +236,15 @@ export async function bootFsnSubstrate() {
     if (btn === 0 && moved < (e.pointerType === 'touch' ? 12 : 6)) {
       const h = fsnHandle();
       const i = h && h.pick_at ? h.pick_at(e.clientX * dpr, e.clientY * dpr) : -1;
-      if (i >= 0) {
-        flyToPedestal(i);
+      if (i >= 0 && e.detail < 2) {
+        // DELAYED like the file zoom: the first click of a floor DOUBLE-click
+        // (descend) must not start the fly, or the floor moves out from under
+        // the second click. openAt cancels this on open/descend.
+        clearTimeout(pendingFileZoom);
+        pendingFileZoom = setTimeout(() => {
+          if (follower) mosaic.sendInput({ kind: 'flyTo', i });
+          else flyToPedestal(i);
+        }, 280);
       } else if (h && h.pick_file_at && e.detail < 2) {
         // DELAYED so a double-click (open) isn't sabotaged: the first click of a
         // dblclick must NOT start the fly, or the file moves out from under the
@@ -223,7 +254,10 @@ export async function bootFsnSubstrate() {
           try {
             const f = JSON.parse(fj);
             clearTimeout(pendingFileZoom);
-            pendingFileZoom = setTimeout(() => flyPanTo(fsnWorldToPan(f.x, f.z), 0.18), 280);
+            pendingFileZoom = setTimeout(() => {
+              if (follower) mosaic.sendInput({ kind: 'flyPan', tp: fsnWorldToPan(f.x, f.z), tz: 0.18 });
+              else flyPanTo(fsnWorldToPan(f.x, f.z), 0.18);
+            }, 280);
           } catch (err) { /* unparseable pick — ignore */ }
         }
       }
@@ -234,6 +268,15 @@ export async function bootFsnSubstrate() {
       const M = globalThis.App && globalThis.App.menuContext; if (M) M.hide();
     });
   });
+  if (follower) {
+    // Neurite's svg wheel handler would zoom THIS window's local Graph (then be
+    // stomped by the leader broadcast = dead-feeling wheel). Capture it first
+    // and forward the intent instead.
+    addEventListener('wheel', (e) => {
+      e.stopPropagation();
+      mosaic.sendInput({ kind: 'zoom', factor: Math.exp(e.deltaY * 0.0009) });
+    }, { capture: true, passive: true });
+  }
   addEventListener('wheel', () => { flight = null; }, { passive: true });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !fsnInConstruct() && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {
@@ -258,7 +301,12 @@ export async function bootFsnSubstrate() {
   const openAt = (x, y) => {
     clearTimeout(pendingFileZoom); // opening — don't also fly
     const path = fsnDescendAt(x, y, dpr);
-    if (path) { recenter(); console.log('[fsn] descended ->', path); return true; }
+    if (path) {
+      recenter();
+      if (follower) mosaic.sendInput({ kind: 'enterPath', path }); // 8c: all windows descend
+      console.log('[fsn] descended ->', path);
+      return true;
+    }
     const fileJson = fsnPickFileAt(x, y, dpr);
     if (fileJson) { fsnBloomFile(fileJson); console.log('[fsn] bloomed', fileJson); return true; }
     return false;
@@ -285,8 +333,12 @@ export async function bootFsnSubstrate() {
   });
   addEventListener('keydown', (e) => {
     if (e.key === 'Backspace' && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {
-      const path = fsnAscend();
-      if (path) { e.preventDefault(); recenter(); console.log('[fsn] ascended ->', path); }
+      const path = fsnAscend(); // embed: console root re-builds the LANDSCAPE
+      if (path) {
+        e.preventDefault(); recenter();
+        if (follower) mosaic.sendInput({ kind: 'enterPath', path });
+        console.log('[fsn] ascended ->', path);
+      }
     }
   });
 

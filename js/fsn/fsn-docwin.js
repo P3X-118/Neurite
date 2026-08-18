@@ -382,6 +382,17 @@ export function expandDirDocs(source, dirPath) {
   return n;
 }
 
+/** Stage 5 z-rebase: the epoch transform T(z) = (z - pan)/s is applied to all
+ * z-anchored doc state so grouped windows are PIXEL-INVARIANT across a rebase
+ * (group scale sc = zoomRef/|zoom| — both divide by s, sc unchanged; anchors
+ * transform with the space). */
+export function rebaseDocState(pan, s) {
+  for (const g of groups.values()) g.zoomRef /= s;
+  for (const w of docWindows.values()) {
+    if (w.gz) { w.gz = { x: (w.gz.x - pan.x) / s, y: (w.gz.y - pan.y) / s }; }
+  }
+}
+
 /** Per-frame: place grouped windows from their z-anchors, scale by the zoom
  * ratio (readability-clamped), and draw each group's frame. */
 function stepGroups() {

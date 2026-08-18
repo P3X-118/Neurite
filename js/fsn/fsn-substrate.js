@@ -14,8 +14,8 @@
 // Wasm assets are vendored in ./pkg (built via `wasm-pack build --target web`).
 
 import init, { FsnEmbed } from './pkg/fsn.js';
-import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow, docsStateJson, restoreByPath, setRemoteDocs, expandDirDocs } from './fsn-docwin.js';
-Object.assign(globalThis, { fsnDocsStateJson: docsStateJson, fsnRestoreByPath: restoreByPath, fsnSetRemoteDocs: setRemoteDocs });
+import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow, docsStateJson, restoreByPath, setRemoteDocs, expandDirDocs, rebaseDocState } from './fsn-docwin.js';
+Object.assign(globalThis, { fsnDocsStateJson: docsStateJson, fsnRestoreByPath: restoreByPath, fsnSetRemoteDocs: setRemoteDocs, fsnRebaseDocState: rebaseDocState });
 import wasmUrl from './pkg/fsn_bg.wasm?url'; // Vite: resolves to the served asset URL
 
 // Neurite world units are ~O(1) around the origin; fsn's landscape spans tens of
@@ -61,15 +61,20 @@ export async function initFsnSubstrate(canvas, { console: consoleMode = false } 
 export function fsnTakeFocus() { return fsn && fsn.take_focus ? fsn.take_focus() : -1; }
 /** True once after a board switch — recenter to the overview. */
 export function fsnTakeRecenter() { return fsn && fsn.take_recenter ? !!fsn.take_recenter() : false; }
-/** fsn world (x,z) → the Graph.pan that centers it (file fly-to). */
+/** fsn world (x,z) → the CURRENT-EPOCH Graph.pan that centers it (Stage 5:
+ * un-based — world coords are absolute, pan is epoch-relative). */
 export function fsnWorldToPan(x, z) {
-  return { x: x / WORLD_SCALE, y: z / WORLD_SCALE };
+  const b = fsnWorldBase;
+  return {
+    x: (x / WORLD_SCALE - b.ox) / b.mul,
+    y: (z / WORLD_SCALE - b.oy) / b.mul,
+  };
 }
 
 /** Graph.pan target that centers pedestal `i` (fsn world → z-space). */
 export function fsnPedestalPan(i) {
   const a = fsn && fsn.pedestal_anchor ? fsn.pedestal_anchor(i) : null;
-  return a ? { x: a[0] / WORLD_SCALE, y: a[2] / WORLD_SCALE } : null;
+  return a ? fsnWorldToPan(a[0], a[2]) : null;
 }
 
 export function fsnHandle() {
@@ -129,12 +134,19 @@ export function fsnStep(dt) {
 
 /** Design B: each frame, slave fsn's camera to Neurite's Graph.pan/zoom so the 3D
  * landscape is the DRIVEN visual skin. Neurite owns coordinates + the infinite zoom. */
+/** Stage 5: z-space is periodically REBASED to keep float precision near unity
+ * (deep zoom drove |zoom| toward 1e-15 where z-anchored artifacts degrade).
+ * The 3D camera needs ABSOLUTE continuity, so it maps through the accumulated
+ * world base: abs_pan = off + pan·mul, abs_zoom = |zoom|·mul. */
+export const fsnWorldBase = { ox: 0, oy: 0, mul: 1 };
+
 export function fsnDriveView() {
   if (!fsn || !fsn.set_view) return;
   const G = globalThis.Graph;
   if (!G || !G.pan || !G.zoom) return;
-  const scale = Math.hypot(G.zoom.x, G.zoom.y); // |Graph.zoom|
-  fsn.set_view(G.pan.x * WORLD_SCALE, G.pan.y * WORLD_SCALE, scale);
+  const b = fsnWorldBase;
+  const scale = Math.hypot(G.zoom.x, G.zoom.y) * b.mul;
+  fsn.set_view((b.ox + G.pan.x * b.mul) * WORLD_SCALE, (b.oy + G.pan.y * b.mul) * WORLD_SCALE, scale);
 }
 
 /** fsn's own orbit (rotate the tower) — Design B rides this on RIGHT-drag. */

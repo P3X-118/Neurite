@@ -163,10 +163,10 @@ export function initMosaic({ onCamera, onWorld, onInput, onRole, onDocs, onDocRe
   addEventListener('beforeunload', () => say({ t: 'bye' }));
   const api = {
     /** Leader: broadcast the camera each frame (throttle upstream). */
-    broadcastCamera(pan, zoom, yaw, pitch) {
+    broadcastCamera(pan, zoom, yaw, pitch, base) {
       if (mosaicState.role !== 'leader') return;
       mosaicState.seq++;
-      say({ t: 'cam', pan, zoom, yaw, pitch, seq: mosaicState.seq });
+      say({ t: 'cam', pan, zoom, yaw, pitch, base, seq: mosaicState.seq });
     },
     /** Leader: broadcast world state (board + descent path) on change. */
     broadcastWorld(board, curPath) {

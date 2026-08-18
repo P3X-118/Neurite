@@ -10,7 +10,7 @@ import {
   isFsnActive, isFractalActive, initFsnSubstrate, fsnStep, fsnDriveView, fsnOrbit, fsnZoom, fsnResize,
   fsnDescendAt, fsnAscend, fsnCurrentPath, fsnHandle, fsnPickFileAt, fsnBloomFile, fsnMenuActions, fsnNodeMenuActions,
   fsnEnterConstruct, fsnExitConstruct, fsnInConstruct, fsnDocCount, fsnToggleNodeFullscreen,
-  fsnTakeFocus, fsnTakeRecenter, fsnPedestalPan, fsnWorldToPan,
+  fsnTakeFocus, fsnTakeRecenter, fsnPedestalPan, fsnWorldToPan, fsnWorldBase,
   fsnFromZtoUV, fsnProjectPx, fsnXyToZ,
 } from './fsn-substrate.js';
 import { mountFsnConsole } from './fsn-console.js';
@@ -118,6 +118,9 @@ export async function bootFsnSubstrate() {
       if (!G || !h) return;
       G.pan.x = m.pan.x; G.pan.y = m.pan.y;
       G.zoom.x = m.zoom.x; G.zoom.y = m.zoom.y;
+      if (m.base) { // Stage 5: the epoch travels with the camera
+        fsnWorldBase.ox = m.base.ox; fsnWorldBase.oy = m.base.oy; fsnWorldBase.mul = m.base.mul;
+      }
       if (h.set_orbit_angles) h.set_orbit_angles(m.yaw, m.pitch);
     },
     onWorld: (m) => {
@@ -141,8 +144,44 @@ export async function bootFsnSubstrate() {
       else if (m.kind === 'enterPath' && m.path && h.enter_path) { h.enter_path(m.path); recenter(); }
     },
   });
+  // Stage 5 — Z-SPACE REBASING (truly-infinite depth): float64 exhausts near
+  // |zoom| ~ 1e-15, where every z-anchored artifact (nodes, grouped windows,
+  // bloom cards) degrades. When |zoom| leaves [1/64, 64] the space renormalizes
+  // to unity via T(z) = (z - pan)/s — nodes, anchors and group refs transform
+  // with it (pixel-invariant), and the 3D camera keeps absolute continuity
+  // through fsnWorldBase (abs = off + rel·mul). The fractal's recenter trick,
+  // ported to the whole hybrid.
+  const rebaseIfNeeded = () => {
+    const G = globalThis.Graph;
+    if (!G || !G.pan || !G.zoom) return;
+    const s = Math.hypot(G.zoom.x, G.zoom.y);
+    if (s > 1 / 64 && s < 64) return;
+    const pan = { x: G.pan.x, y: G.pan.y };
+    const exp = (globalThis.settings && globalThis.settings.zoomContentExp) || 0.5;
+    const nodeScaleK = Math.pow(s, -2 * exp); // keeps Node.draw's rendered size invariant
+    if (G.nodes) {
+      for (const n of Object.values(G.nodes)) {
+        if (!n || !n.pos) continue;
+        n.pos.x = (n.pos.x - pan.x) / s; n.pos.y = (n.pos.y - pan.y) / s;
+        if (n.anchor && n.anchor.x !== undefined) {
+          n.anchor.x = (n.anchor.x - pan.x) / s; n.anchor.y = (n.anchor.y - pan.y) / s;
+        }
+        if (typeof n.scale === 'number') n.scale *= nodeScaleK;
+      }
+    }
+    if (globalThis.fsnRebaseDocState) globalThis.fsnRebaseDocState(pan, s);
+    G.zoom.x /= s; G.zoom.y /= s;
+    G.pan.x = 0; G.pan.y = 0;
+    fsnWorldBase.ox += pan.x * fsnWorldBase.mul;
+    fsnWorldBase.oy += pan.y * fsnWorldBase.mul;
+    fsnWorldBase.mul *= s;
+    flight = null; // a flight's from/to snapshots are epoch-bound
+    globalThis.__fsnRebases = (globalThis.__fsnRebases || 0) + 1;
+    console.log('[fsn] z-rebase s=' + s.toFixed(5) + ' mul=' + fsnWorldBase.mul.toExponential(2));
+  };
   const loop = (now) => {
     globalThis.__fsnFrames = (globalThis.__fsnFrames || 0) + 1; // loop liveness (debug)
+    rebaseIfNeeded();
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     const fi = fsnTakeFocus();          // panel fly-to → ease Graph there
@@ -156,7 +195,8 @@ export async function bootFsnSubstrate() {
         mosaic.applyMosaicRect(h);
         if (h.orbit_angles) {
           const [yaw, pitch] = h.orbit_angles();
-          mosaic.broadcastCamera({ x: G.pan.x, y: G.pan.y }, { x: G.zoom.x, y: G.zoom.y }, yaw, pitch);
+          mosaic.broadcastCamera({ x: G.pan.x, y: G.pan.y }, { x: G.zoom.x, y: G.zoom.y }, yaw, pitch,
+            { ox: fsnWorldBase.ox, oy: fsnWorldBase.oy, mul: fsnWorldBase.mul });
         }
         const b = activeBoardIdx();
         const cp = h.current_path ? h.current_path() : '';

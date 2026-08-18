@@ -54,6 +54,7 @@ export function openDocWindow(f) {
     `<span class="dw-path">${esc(f.source)} : ${esc(f.path)}</span>` +
     `<button class="dw-fz" data-d="-1" title="smaller text" type="button">A−</button>` +
     `<button class="dw-fz" data-d="1" title="larger text" type="button">A+</button>` +
+    `<button class="dw-ungroup" title="remove from its group" type="button">⊟</button>` +
     `<button class="dw-ret" title="retract — dock beside its tower, still in view" type="button">⇱</button>` +
     `<button class="dw-min" title="minimize — pull back to its tower" type="button">−</button>` +
     `<button class="dw-max" title="maximize / restore (ctrl+m)" type="button">⤢</button>` +
@@ -94,6 +95,7 @@ export function openDocWindow(f) {
     fontPx: 13, native: nativeView(f.name),
     minimized: false, chip: null, retracted: false,
     size: { w: W, h: H },
+    group: null, gz: null, _groupScale: 1,
   };
   if (win.native) el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
   docWindows.set(id, win);
@@ -129,7 +131,26 @@ export function openDocWindow(f) {
     el.style.left = win.home.x + 'px';
     el.style.top = win.home.y + 'px';
   });
-  bar.addEventListener('pointerup', () => { win.dragging = false; });
+  bar.addEventListener('pointerup', () => {
+    if (!win.dragging) return;
+    win.dragging = false;
+    // Stage 9 gesture: my centre dropped INSIDE another window = group with it
+    const r = el.getBoundingClientRect();
+    const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+    for (const other of docWindows.values()) {
+      if (other === win || other.minimized || other.retracted || other.el.style.display === 'none') continue;
+      const o = other.el.getBoundingClientRect();
+      if (cx > o.x && cx < o.x + o.width && cy > o.y && cy < o.y + o.height) {
+        groupWindows(win, other);
+        return;
+      }
+    }
+    // dragged a grouped window somewhere empty: keep the group, move its anchor
+    if (win.group) {
+      const map = screenZMap();
+      if (map) win.gz = map.toZ(cx, cy);
+    }
+  });
   el.querySelector('.dw-close').addEventListener('click', () => closeDocWindow(id));
   el.querySelectorAll('.dw-fz').forEach((b) => b.addEventListener('click', () => {
     win.fontPx = Math.max(10, Math.min(22, win.fontPx + +b.dataset.d));
@@ -141,6 +162,7 @@ export function openDocWindow(f) {
   el.querySelector('.dw-max').addEventListener('click', () => toggleMaximize(win));
   el.querySelector('.dw-min').addEventListener('click', () => minimizeDocWindow(win));
   el.querySelector('.dw-ret').addEventListener('click', () => toggleRetract(win));
+  el.querySelector('.dw-ungroup').addEventListener('click', () => ungroupWindow(win));
   // a retracted card expands on click anywhere (buttons keep their own actions)
   el.addEventListener('click', (e) => {
     if (win.retracted && !e.target.closest('button')) toggleRetract(win);
@@ -182,6 +204,7 @@ async function loadContent(win) {
 export function closeDocWindow(id) {
   const win = docWindows.get(id);
   if (!win) return;
+  if (win.group) ungroupWindow(win);
   docWindows.delete(id);
   markRow(win, false);
   if (win.chip) win.chip.remove();
@@ -224,6 +247,135 @@ function anchorScreen(win) {
   return { x: p[0] * rx, y: p[1] * ry };
 }
 
+// ---------------------------------------------------------------------------
+// Stage 9 — WINDOW GROUPS with a SHARED ZOOM STATE (user-directed 2026-08-17:
+// "group different windows so we can view them all in the same zoom state, but
+// neurite's natural state is letting these items float in their own space").
+// A group is a z-space frame: each member stores its Graph-z position (w.gz)
+// and the group's reference zoom. Camera zoom then moves AND scales the whole
+// set coherently (Neurite-native behavior, opted into by grouping); free
+// windows stay screen-fixed. Formed by DROPPING one window onto another; ⊟
+// ungroups. Suspended while dragging/maximized/minimized/retracted/construct.
+let groupSeq = 0;
+const groups = new Map(); // gid -> { zoomRef, label }
+// debug ground truth (same spirit as __fsnFrames)
+globalThis.__fsnGroupWin = (i, j) => { const ws = [...docWindows.values()]; if (ws[i] && ws[j]) groupWindows(ws[i], ws[j]); return __fsnGroupsDbg(); };
+globalThis.__fsnGroupsDbg = () => JSON.stringify({
+  size: groups.size,
+  wins: [...docWindows.values()].map((w) => ({ g: w.group, gs: +(w._groupScale || 0).toFixed(3), gz: !!w.gz, drag: w.dragging })),
+});
+
+const zoomMag = () => {
+  const G = globalThis.Graph;
+  return G ? Math.hypot(G.zoom.x, G.zoom.y) : 1;
+};
+
+/** Per-frame affine map screen↔z, probed from Graph.xyToZ itself (3 calls) so
+ * it can never drift from Neurite's internals. Returns {toScreen(z)->{x,y}}. */
+function screenZMap() {
+  const G = globalThis.Graph;
+  if (!G || !G.xyToZ) return null;
+  const o = G.xyToZ(0, 0), ex = G.xyToZ(1, 0), ey = G.xyToZ(0, 1);
+  const ax = { x: ex.x - o.x, y: ex.y - o.y }; // dz per screen-x px
+  const ay = { x: ey.x - o.x, y: ey.y - o.y }; // dz per screen-y px
+  const det = ax.x * ay.y - ax.y * ay.x;
+  if (!det) return null;
+  return {
+    toScreen(z) {
+      const dx = z.x - o.x, dy = z.y - o.y;
+      return { x: (dx * ay.y - dy * ay.x) / det, y: (dy * ax.x - dx * ax.y) / det };
+    },
+    toZ(x, y) { return G.xyToZ(x, y); },
+  };
+}
+
+/** Put a window into b's group (or form a new one). Captures the member's
+ * z-anchor at its CURRENT screen centre. */
+export function groupWindows(a, b) {
+  if (a === b || a.minimized || b.minimized || a.retracted || b.retracted) return;
+  const map = screenZMap();
+  if (!map) return;
+  let gid = b.group;
+  if (!gid) {
+    gid = 'g' + ++groupSeq;
+    groups.set(gid, { zoomRef: zoomMag(), label: 'GROUP ' + groupSeq });
+    b.group = gid;
+    const rb = b.el.getBoundingClientRect();
+    b.gz = map.toZ(rb.x + rb.width / 2, rb.y + rb.height / 2);
+  }
+  a.group = gid;
+  const ra = a.el.getBoundingClientRect();
+  a.gz = map.toZ(ra.x + ra.width / 2, ra.y + ra.height / 2);
+  for (const w of [a, b]) w.el.classList.add('grouped');
+}
+
+export function ungroupWindow(w) {
+  const gid = w.group;
+  if (!gid) return;
+  w.group = null; w.gz = null;
+  w.el.classList.remove('grouped');
+  w.el.style.transform = '';
+  const members = [...docWindows.values()].filter((x) => x.group === gid);
+  if (members.length === 1) ungroupWindow(members[0]); // a group of one is free
+  if (members.length === 0) groups.delete(gid);
+}
+
+function groupsLayer() {
+  let el = document.getElementById('fsn-groups');
+  if (!el) {
+    el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    el.id = 'fsn-groups';
+    el.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:38;';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+/** Per-frame: place grouped windows from their z-anchors, scale by the zoom
+ * ratio (readability-clamped), and draw each group's frame. */
+function stepGroups() {
+  const inConstruct = globalThis.fsnInConstruct && globalThis.fsnInConstruct();
+  const layer = document.getElementById('fsn-groups');
+  if (groups.size === 0 || inConstruct) { if (layer) layer.replaceChildren(); return; }
+  const map = screenZMap();
+  if (!map) return;
+  const zm = zoomMag() || 1;
+  const bounds = new Map(); // gid -> {x0,y0,x1,y1}
+  for (const w of docWindows.values()) {
+    if (!w.group || w.dragging || w.maximized || w.minimized || w.retracted) continue;
+    const g = groups.get(w.group);
+    if (!g) { w.group = null; continue; }
+    const sc = Math.max(0.35, Math.min(2.2, g.zoomRef / zm)); // readability clamp
+    const c = map.toScreen(w.gz);
+    const bw = (w.size ? w.size.w : 440), bh = (w.size ? w.size.h : 360);
+    w.el.style.left = Math.round(c.x - bw / 2) + 'px';
+    w.el.style.top = Math.round(c.y - bh / 2) + 'px';
+    w.el.style.transformOrigin = 'center';
+    w._groupScale = sc; // the float transform composes with this in stepDocWindows
+    const r = { x0: c.x - (bw * sc) / 2, y0: c.y - (bh * sc) / 2, x1: c.x + (bw * sc) / 2, y1: c.y + (bh * sc) / 2 };
+    const b = bounds.get(w.group);
+    bounds.set(w.group, b ? { x0: Math.min(b.x0, r.x0), y0: Math.min(b.y0, r.y0), x1: Math.max(b.x1, r.x1), y1: Math.max(b.y1, r.y1) } : r);
+  }
+  const svg = groupsLayer();
+  const want = [...bounds.entries()];
+  while (svg.children.length > want.length * 2) svg.removeChild(svg.lastChild);
+  while (svg.children.length < want.length * 2) {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('class', 'fsn-groupframe');
+    svg.appendChild(rect);
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('class', 'fsn-grouplabel');
+    svg.appendChild(label);
+  }
+  want.forEach(([gid, b], i) => {
+    const rect = svg.children[i * 2], label = svg.children[i * 2 + 1];
+    rect.setAttribute('x', Math.round(b.x0 - 10)); rect.setAttribute('y', Math.round(b.y0 - 24));
+    rect.setAttribute('width', Math.round(b.x1 - b.x0 + 20)); rect.setAttribute('height', Math.round(b.y1 - b.y0 + 34));
+    label.setAttribute('x', Math.round(b.x0 - 2)); label.setAttribute('y', Math.round(b.y0 - 10));
+    label.textContent = (groups.get(gid) || {}).label || gid;
+  });
+}
+
 /** Mark/unmark the panel row for an open document (tree ↔ view sync). */
 function markRow(win, open) {
   for (const row of document.querySelectorAll('#tree-rows .row.file')) {
@@ -251,6 +403,7 @@ export function minimizeDocWindow(win) {
   if (win.minimized) return;
   if (win.maximized) toggleMaximize(win);
   if (win.retracted) { win.retracted = false; win.el.classList.remove('retracted'); }
+  if (win.group) ungroupWindow(win);
   win.minimized = true;
   const a = anchorScreen(win) || { x: innerWidth / 2, y: innerHeight * 0.7 };
   const r = win.el.getBoundingClientRect();
@@ -310,6 +463,7 @@ export function restoreDocWindow(win) {
 export function toggleRetract(win) {
   if (win.minimized) return;
   if (win.maximized) toggleMaximize(win);
+  if (!win.retracted && win.group) ungroupWindow(win);
   win.retracted = !win.retracted;
   win.el.classList.toggle('retracted', win.retracted);
   if (!win.retracted) {
@@ -448,6 +602,7 @@ export function stepDocWindows(now) {
     w.chip.style.top = y + 'px';
   }
   stepRemoteChips(placed); // 8d: peers' docked docs share the same towers
+  stepGroups(); // Stage 9: z-anchored groups follow the camera
   for (const w of docWindows.values()) {
     if (w.minimized) {
       continue;
@@ -464,11 +619,12 @@ export function stepDocWindows(now) {
       }
       // fall through: the slight float rides ON TOP of the anchor tracking
     }
+    const gs = w.group && !w.dragging && !w.maximized ? (w._groupScale || 1) : 1;
     if (w.dragging || w.maximized) { w.el.style.transform = ''; continue; }
-    if (reduced) continue;
+    if (reduced) { if (gs !== 1) w.el.style.transform = `scale(${gs.toFixed(3)})`; continue; }
     const t = now / 1000;
     const fx = Math.sin(t * 0.5 + w.phase) * 3.5;
     const fy = Math.cos(t * 0.37 + w.phase * 1.7) * 2.5;
-    w.el.style.transform = `translate(${fx.toFixed(2)}px, ${fy.toFixed(2)}px)`;
+    w.el.style.transform = `translate(${fx.toFixed(2)}px, ${fy.toFixed(2)}px)` + (gs !== 1 ? ` scale(${gs.toFixed(3)})` : '');
   }
 }

@@ -333,6 +333,18 @@ export async function bootFsnSubstrate() {
     return false;
   };
   addEventListener('dblclick', (e) => { openAt(e.clientX, e.clientY); });
+  // Menu surface (right-click "Expand tower"): enter a directory path with the
+  // same semantics as the open gesture — local view + mosaic sync + recenter.
+  globalThis.fsnEnterPathSynced = (path) => {
+    const h = fsnHandle();
+    if (!h || !h.enter_path || !path) return '';
+    const r = h.enter_path(path);
+    if (r) {
+      recenter();
+      if (isFol()) mosaic.sendInput({ kind: 'enterPath', path: r });
+    }
+    return r;
+  };
   // Touch DOUBLE-TAP = the same open gesture (browsers don't synthesize dblclick
   // once touch-action is none). Window-level like the dblclick listener — a tap
   // often lands on a LABEL chip riding the file box, not the background — with

@@ -284,8 +284,21 @@ export function fsnMenuActions(menu, x, y) {
   } else {
     const floor = h.pick_at ? h.pick_at(px, py) : -1;
     if (floor >= 1) {
-      menu.menu.append(menu.option('\u25bd Descend into floor', () => { if (h.descend(floor)) fsnRecenterPan(); }));
-      added = true;
+      // "Expand tower" (user-directed 2026-08-18): open THIS directory as a
+      // tower — one level only, floors = its immediate subfolders; deeper
+      // levels stay collapsed until explicitly entered. Path-based via the
+      // dir row's data-index (descend(i)'s tower child-index semantics
+      // silently no-op on the landscape — same fix as the dblclick descend).
+      const row = document.querySelector('#tree-rows .row[data-index="' + floor + '"]');
+      const rpath = row && row.dataset ? row.dataset.path || '' : '';
+      const rname = row && row.dataset ? row.dataset.name || rpath : rpath;
+      if (rpath && rpath !== '/') {
+        menu.menu.append(menu.option('⌸ Expand tower  ' + rname, () => {
+          if (globalThis.fsnEnterPathSynced) globalThis.fsnEnterPathSynced(rpath);
+          else if (fsn.enter_path && fsn.enter_path(rpath)) fsnRecenterPan();
+        }));
+        added = true;
+      }
     }
   }
   const cur = h.current_path ? h.current_path() : '';

@@ -1002,3 +1002,16 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
   border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
   font: 12px "Courier New", monospace; }
 .dw-ret:hover { background: rgba(95, 230, 208, 0.22); }
+
+/* Stage 9: grouped windows share a zoom state — amber accent marks the set. */
+.fsn-docwin .dw-ungroup { display: none; }
+.fsn-docwin.grouped .dw-ungroup { display: inline-block; min-width: 28px; height: 24px;
+  cursor: pointer; background: rgba(255, 210, 127, 0.10); color: #ffd27f;
+  border: 1px solid rgba(255, 210, 127, 0.45); border-radius: 2px;
+  font: 12px "Courier New", monospace; }
+.fsn-docwin.grouped .dw-ungroup:hover { background: rgba(255, 210, 127, 0.25); }
+.fsn-docwin.grouped { border-top-color: #ffd27f; }
+.fsn-groupframe { fill: none; stroke: #ffd27f; stroke-opacity: 0.4;
+  stroke-width: 1; stroke-dasharray: 8 6; }
+.fsn-grouplabel { fill: #ffd27f; fill-opacity: 0.75;
+  font: 10px "Courier New", monospace; letter-spacing: 0.12em; }

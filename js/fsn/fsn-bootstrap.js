@@ -335,6 +335,18 @@ export async function bootFsnSubstrate() {
   addEventListener('dblclick', (e) => { openAt(e.clientX, e.clientY); });
   // Menu surface (right-click "Expand tower"): enter a directory path with the
   // same semantics as the open gesture — local view + mosaic sync + recenter.
+  // Right-click focus (user-directed 2026-08-18): the clicked target eases
+  // toward the camera while its context menu is up. Role-aware (mosaic).
+  globalThis.fsnFlyFocus = (t) => {
+    if (t && typeof t.ped === 'number') {
+      if (isFol()) mosaic.sendInput({ kind: 'flyTo', i: t.ped });
+      else flyToPedestal(t.ped);
+    } else if (t && t.file) {
+      const tp = fsnWorldToPan(t.file.x, t.file.z);
+      if (isFol()) mosaic.sendInput({ kind: 'flyPan', tp, tz: 0.22 });
+      else flyPanTo(tp, 0.22);
+    }
+  };
   globalThis.fsnEnterPathSynced = (path) => {
     const h = fsnHandle();
     if (!h || !h.enter_path || !path) return '';

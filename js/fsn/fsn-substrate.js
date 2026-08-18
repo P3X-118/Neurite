@@ -14,7 +14,7 @@
 // Wasm assets are vendored in ./pkg (built via `wasm-pack build --target web`).
 
 import init, { FsnEmbed } from './pkg/fsn.js';
-import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow, docsStateJson, restoreByPath, setRemoteDocs } from './fsn-docwin.js';
+import { docWindows, openDocWindow, topDocWindow, toggleMaximize, stepDocWindows, restoreDocWindow, docsStateJson, restoreByPath, setRemoteDocs, expandDirDocs } from './fsn-docwin.js';
 Object.assign(globalThis, { fsnDocsStateJson: docsStateJson, fsnRestoreByPath: restoreByPath, fsnSetRemoteDocs: setRemoteDocs });
 import wasmUrl from './pkg/fsn_bg.wasm?url'; // Vite: resolves to the served asset URL
 
@@ -277,6 +277,8 @@ export function fsnMenuActions(menu, x, y) {
   if (fileJson) {
     let f = null; try { f = JSON.parse(fileJson); } catch (e) {}
     if (f) {
+      // zoom the right-clicked file toward focus while the menu is showing
+      if (globalThis.fsnFlyFocus) globalThis.fsnFlyFocus({ file: f });
       menu.menu.append(menu.option('\u2922 Open  ' + f.name, () => fsnBloomFile(fileJson)));
       menu.menu.append(menu.option('\u29c9 Copy path', () => { if (navigator.clipboard) navigator.clipboard.writeText(f.path || ''); }));
       added = true;
@@ -284,18 +286,20 @@ export function fsnMenuActions(menu, x, y) {
   } else {
     const floor = h.pick_at ? h.pick_at(px, py) : -1;
     if (floor >= 1) {
-      // "Expand tower" (user-directed 2026-08-18): open THIS directory as a
-      // tower — one level only, floors = its immediate subfolders; deeper
-      // levels stay collapsed until explicitly entered. Path-based via the
-      // dir row's data-index (descend(i)'s tower child-index semantics
-      // silently no-op on the landscape — same fix as the dblclick descend).
+      // EXPAND (user-corrected 2026-08-18: the tower re-root was wrong): bloom
+      // the directory's DIRECT documents out from its base as z-space cards —
+      // tethered to their file boxes, floating in Neurite space (camera zoom
+      // scales them up to reading size). Subfolders stay collapsed.
       const row = document.querySelector('#tree-rows .row[data-index="' + floor + '"]');
       const rpath = row && row.dataset ? row.dataset.path || '' : '';
       const rname = row && row.dataset ? row.dataset.name || rpath : rpath;
+      const rsrc = row && row.dataset ? row.dataset.source || '' : '';
       if (rpath && rpath !== '/') {
-        menu.menu.append(menu.option('⌸ Expand tower  ' + rname, () => {
-          if (globalThis.fsnEnterPathSynced) globalThis.fsnEnterPathSynced(rpath);
-          else if (fsn.enter_path && fsn.enter_path(rpath)) fsnRecenterPan();
+        // zoom the right-clicked tower toward focus while the menu is showing
+        if (globalThis.fsnFlyFocus) globalThis.fsnFlyFocus({ ped: floor });
+        menu.menu.append(menu.option('⌁ Expand documents  ' + rname, () => {
+          const n = expandDirDocs(rsrc, rpath);
+          if (!n && globalThis.fsnEnterPathSynced) globalThis.fsnEnterPathSynced(rpath); // no docs in scene -> enter instead
         }));
         added = true;
       }

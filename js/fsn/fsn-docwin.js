@@ -331,6 +331,57 @@ function groupsLayer() {
   return el;
 }
 
+/** EXPAND DOCUMENTS (user-directed 2026-08-18: "right click and expand all the
+ * documents out from their base tethered and in the neurite space, not all
+ * attached to the screen persistent zoom"): open a directory's DIRECT files as
+ * compact cards fanned around the tower base, all in ONE z-space group — they
+ * float in Neurite space (camera zoom moves AND scales them; zooming in brings
+ * them to reading size), each tethered to its file box. Subfolders are NOT
+ * expanded — one level, as always. */
+export function expandDirDocs(source, dirPath) {
+  const fsn = globalThis.fsnHandle && globalThis.fsnHandle();
+  const map = screenZMap();
+  if (!fsn || !fsn.find_file || !map) return 0;
+  const base = dirPath.replace(/\/$/, '');
+  // direct children only, from the tree rows (the wasm-built truth)
+  const rows = [...document.querySelectorAll('#tree-rows .row.file')].filter((r) => {
+    if (r.dataset.source !== source) return false;
+    const pp = r.dataset.path || '';
+    if (!pp.startsWith(base + '/')) return false;
+    return !pp.slice(base.length + 1).includes('/');
+  }).slice(0, 8); // sane cap
+  if (!rows.length) return 0;
+  const gid = 'g' + ++groupSeq;
+  // zoomRef below the current zoom => the cards open COMPACT (scale ~0.55) and
+  // grow toward full reading size as the camera zooms in toward the tower.
+  groups.set(gid, { zoomRef: zoomMag() * 0.55, label: base.split('/').pop().toUpperCase() + ' · DOCS' });
+  let n = 0;
+  rows.forEach((r, i) => {
+    const hit = fsn.find_file(r.dataset.source || '', r.dataset.path || '');
+    if (!hit) return;
+    let f; try { f = JSON.parse(hit); } catch (e) { return; }
+    // already open? adopt it into the expansion instead of duplicating
+    let win = [...docWindows.values()].find((w) => w.source === f.source && w.path === f.path);
+    if (!win) win = openDocWindow(f);
+    if (!win) return;
+    if (win.minimized) restoreDocWindow(win);
+    if (win.retracted) { win.retracted = false; win.el.classList.remove('retracted'); }
+    // fan the cards around the tower base's screen position, then anchor in z
+    const pr = fsn.project(f.x, f.y, f.z);
+    const c = document.getElementById('fsn-canvas');
+    const rx = c && c.width ? c.clientWidth / c.width : 1, ry = c && c.height ? c.clientHeight / c.height : 1;
+    const bx = pr ? pr[0] * rx : innerWidth / 2, by = pr ? pr[1] * ry : innerHeight / 2;
+    const ang = (i / rows.length) * Math.PI * 2 - Math.PI / 2;
+    const R = 150 + 26 * (i % 2);
+    win.group = gid;
+    win.gz = map.toZ(bx + Math.cos(ang) * R, by + Math.sin(ang) * R * 0.7 - 60);
+    win.el.classList.add('grouped');
+    n++;
+  });
+  if (n === 0) groups.delete(gid);
+  return n;
+}
+
 /** Per-frame: place grouped windows from their z-anchors, scale by the zoom
  * ratio (readability-clamped), and draw each group's frame. */
 function stepGroups() {

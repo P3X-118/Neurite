@@ -397,6 +397,41 @@ export async function bootFsnSubstrate() {
     }
     return r;
   };
+  // Touch LONG-PRESS = the right-click menu (phones have no right-click; the
+  // entire fsn action surface — Expand documents, Open, Construct — was
+  // desktop-only). 550ms hold, <10px drift; the release is swallowed so the
+  // menu isn't instantly dismissed by its own gesture.
+  let lp = null; // { t, x, y }
+  let lpSwallow = false;
+  addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    if (e.target && e.target.closest && e.target.closest('#tree, .fsn-docwin, .fsn-dockchip, #reader, #ctxmenu, #login, #fsn-topbar, button, input')) return;
+    lp = { x: e.clientX, y: e.clientY, t: setTimeout(() => {
+      lpSwallow = true;
+      // the release's COMPAT mouse events (mousedown fires after touchend and
+      // Neurite hides the menu on any non-right mousedown) must die at the
+      // source: preventDefault on the touchend cancels compat generation.
+      addEventListener('touchend', (te) => { te.preventDefault(); }, { capture: true, once: true, passive: false });
+      const target = document.elementFromPoint(lp.x, lp.y) || document.body;
+      const M = globalThis.App && globalThis.App.menuContext;
+      if (M) M.open(lp.x, lp.y, target);
+    }, 550) };
+  });
+  addEventListener('pointermove', (e) => {
+    if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) { clearTimeout(lp.t); lp = null; }
+  });
+  addEventListener('pointerup', (e) => {
+    if (lp) { clearTimeout(lp.t); lp = null; }
+    if (lpSwallow) {
+      // the finger lifting off after the menu opened must not click-through
+      const swallowClick = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+      addEventListener('click', swallowClick, { capture: true, once: true });
+      setTimeout(() => removeEventListener('click', swallowClick, { capture: true }), 400);
+      lpSwallow = false;
+    }
+  }, true);
+  addEventListener('pointercancel', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
+
   // Touch DOUBLE-TAP = the same open gesture (browsers don't synthesize dblclick
   // once touch-action is none). Window-level like the dblclick listener — a tap
   // often lands on a LABEL chip riding the file box, not the background — with

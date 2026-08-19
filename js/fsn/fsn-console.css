@@ -1015,3 +1015,22 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
   stroke-width: 1; stroke-dasharray: 8 6; }
 .fsn-grouplabel { fill: #ffd27f; fill-opacity: 0.75;
   font: 10px "Courier New", monospace; letter-spacing: 0.12em; }
+
+/* PDF pages (pdf.js) — the reading surface. */
+.dw-pdf { flex: 1; overflow: auto; background: #071513; padding: 8px;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.dw-page { margin: 0 auto 10px; width: fit-content;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5); background: #0a1f1c; }
+.dw-page canvas { display: block; }
+
+/* Mobile ergonomics (44px touch standard): bar controls, carets, chips. */
+@media (max-width: 700px) {
+  .fsn-docwin .dw-bar { padding: 8px; gap: 6px; }
+  .dw-fz, .dw-min, .dw-max, .dw-close, .dw-ret {
+    min-width: 40px !important; height: 38px !important; font-size: 15px !important;
+  }
+  .fsn-docwin .dw-ungroup { display: none !important; } /* grouping gestures are desktop */
+  .row-caret { width: 30px; font-size: 13px; }
+  #tree-rows .row { min-height: 40px; display: flex; align-items: center; }
+  .fsn-dockchip { min-height: 38px; padding: 8px 14px; font-size: 12px; }
+}

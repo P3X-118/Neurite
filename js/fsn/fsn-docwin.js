@@ -43,6 +43,73 @@ const textDoc = (name, text) =>
   `<div style="color:#5fe6d0;border-bottom:1px solid #0a5548;padding-bottom:8px;margin-bottom:14px">▤ ${esc(name)}</div>` +
   `<div style="white-space:pre-wrap;word-break:break-word">${esc(text)}</div></div></body>`;
 
+/** PDF rendering via pdf.js (already on the page from Neurite's imports) —
+ * the ONLY way PDFs work on phones (mobile Chrome has no inline viewer), and
+ * consistent on desktop too. Lazy per-page canvases (IntersectionObserver),
+ * fit-width, A−/A+ re-renders at ±scale. Falls back to the native iframe
+ * viewer when pdfjsLib is unavailable. */
+async function renderPdf(win, url) {
+  const lib = globalThis.pdfjsLib;
+  if (!lib) { // no pdf.js — desktop native viewer / download
+    win.body.removeAttribute('sandbox');
+    win.body.src = url;
+    return;
+  }
+  try {
+    if (lib.GlobalWorkerOptions && !lib.GlobalWorkerOptions.workerSrc) {
+      // cross-origin worker fails closed into pdf.js's fake-worker (main thread) — fine
+      lib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.worker.min.js';
+    }
+    const buf = await (await fetch(url)).arrayBuffer();
+    const doc = await lib.getDocument({ data: buf }).promise;
+    win.body.style.display = 'none';
+    let scroller = win.el.querySelector('.dw-pdf');
+    if (!scroller) {
+      scroller = document.createElement('div');
+      scroller.className = 'dw-pdf';
+      win.el.appendChild(scroller);
+    }
+    scroller.replaceChildren();
+    win.pdf = { doc, scale: 1, io: null };
+    const pageBox = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const holder = document.createElement('div');
+      holder.className = 'dw-page';
+      holder.dataset.page = i;
+      scroller.appendChild(holder);
+      pageBox.push(holder);
+    }
+    const renderPage = async (holder) => {
+      if (holder.dataset.done === win.pdf.scale.toFixed(2)) return;
+      holder.dataset.done = win.pdf.scale.toFixed(2);
+      const page = await doc.getPage(+holder.dataset.page);
+      const avail = Math.max(200, scroller.clientWidth - 16);
+      const base = page.getViewport({ scale: 1 });
+      const fit = (avail / base.width) * win.pdf.scale;
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const vp = page.getViewport({ scale: fit });
+      let cv = holder.querySelector('canvas');
+      if (!cv) { cv = document.createElement('canvas'); holder.replaceChildren(cv); }
+      cv.width = Math.round(vp.width * dpr);
+      cv.height = Math.round(vp.height * dpr);
+      cv.style.width = Math.round(vp.width) + 'px';
+      cv.style.height = Math.round(vp.height) + 'px';
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    };
+    win.pdf.io = new IntersectionObserver((entries) => {
+      for (const e2 of entries) if (e2.isIntersecting) renderPage(e2.target);
+    }, { root: scroller, rootMargin: '600px' });
+    pageBox.forEach((h) => { h.style.minHeight = '200px'; win.pdf.io.observe(h); });
+    renderPage(pageBox[0]); // first page immediately
+    win.pdf.rerender = () => { pageBox.forEach((h) => { delete h.dataset.done; }); renderPage(pageBox[0]); };
+  } catch (e) {
+    win.body.style.display = '';
+    win.body.srcdoc = textDoc(win.name, '(pdf failed to render: ' + e.message + ') ');
+  }
+}
+
 export function openDocWindow(f) {
   const id = 'docwin-' + ++seq;
   const el = document.createElement('section');
@@ -97,7 +164,8 @@ export function openDocWindow(f) {
     size: { w: W, h: H },
     group: null, gz: null, _groupScale: 1,
   };
-  if (win.native) el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
+  if (win.native && !f.name.toLowerCase().endsWith('.pdf'))
+    el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
   docWindows.set(id, win);
   loadContent(win);
   markRow(win, true); // tree shows what's open
@@ -153,11 +221,16 @@ export function openDocWindow(f) {
   });
   el.querySelector('.dw-close').addEventListener('click', () => closeDocWindow(id));
   el.querySelectorAll('.dw-fz').forEach((b) => b.addEventListener('click', () => {
+    if (win.pdf) { // A± = pdf render scale
+      win.pdf.scale = Math.max(0.6, Math.min(2.4, win.pdf.scale + 0.2 * +b.dataset.d));
+      win.pdf.rerender();
+      return;
+    }
     win.fontPx = Math.max(10, Math.min(22, win.fontPx + +b.dataset.d));
-    try { // srcdoc is same-origin; native views (pdf/img) have no text to size
+    try { // srcdoc is same-origin
       const doc = win.body.contentDocument;
       if (doc && doc.body) doc.body.style.fontSize = win.fontPx + 'px';
-    } catch (e) { /* cross-origin native view — no-op */ }
+    } catch (e) { /* no-op */ }
   }));
   el.querySelector('.dw-max').addEventListener('click', () => toggleMaximize(win));
   el.querySelector('.dw-min').addEventListener('click', () => minimizeDocWindow(win));
@@ -175,12 +248,13 @@ async function loadContent(win) {
   const fsn = globalThis.fsnHandle && globalThis.fsnHandle();
   const url = fsn && fsn.raw_url ? fsn.raw_url(win.source, win.path) : '';
   if (!url) { win.body.srcdoc = textDoc(win.name, '(this file’s source isn’t reachable right now)'); return; }
+  if (win.name.toLowerCase().endsWith('.pdf')) {
+    // pdf.js everywhere — phones have no inline PDF viewer at all
+    renderPdf(win, url);
+    return;
+  }
   if (nativeView(win.name)) {
-    // A sandboxed iframe DISABLES Chrome's built-in PDF viewer (plugins are off
-    // in sandboxes) — PDFs showed nothing (user-reported 2026-08-17). Native
-    // views are our own same-origin corpus files: drop the sandbox for them;
-    // srcdoc text keeps it. (Sandbox changes only apply on the next load, so
-    // remove BEFORE setting src.)
+    // images/media: sandbox off (it disables plugins/decoding paths), native render
     win.body.removeAttribute('sandbox');
     win.body.src = url;
     return;
@@ -205,6 +279,7 @@ export function closeDocWindow(id) {
   const win = docWindows.get(id);
   if (!win) return;
   if (win.group) ungroupWindow(win);
+  if (win.pdf && win.pdf.io) win.pdf.io.disconnect();
   docWindows.delete(id);
   markRow(win, false);
   if (win.chip) win.chip.remove();

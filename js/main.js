@@ -307,6 +307,7 @@ class PageLoad {
         window.NeuriteAnimation = Animation; // Neurite's Animation class (window.Animation is the DOM built-in!)
         // fsn substrate render loop (fsnDriveView) can slave fsn to Graph.pan/zoom.
         App = new App();
+        window.App = App; // fsn console: modules reach the context menu etc. (same global-lexical gotcha as Graph)
         App.init();
     }
 

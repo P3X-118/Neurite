@@ -1001,6 +1001,15 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
   background: rgba(95, 230, 208, 0.08); color: #9ff3e0;
   border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
   font: 12px "Courier New", monospace; }
+/* the screen-pin: dim while the window lives in z-space (the default), lit
+   while pinned to the view. Meaningless on the phone sheet. */
+.dw-pin { min-width: 28px; height: 24px; cursor: pointer;
+  background: rgba(95, 230, 208, 0.08); color: #9ff3e0; opacity: 0.45;
+  border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;
+  font: 12px "Courier New", monospace; }
+.fsn-docwin.pinned .dw-pin { opacity: 1;
+  background: rgba(240, 200, 90, 0.18); border-color: rgba(240, 200, 90, 0.6); }
+@media (max-width: 700px) { .dw-pin { display: none; } }
 .dw-ret:hover { background: rgba(95, 230, 208, 0.22); }
 
 /* Stage 9: grouped windows share a zoom state — amber accent marks the set. */

@@ -122,6 +122,7 @@ export function openDocWindow(f) {
     `<button class="dw-fz" data-d="-1" title="smaller text" type="button">A−</button>` +
     `<button class="dw-fz" data-d="1" title="larger text" type="button">A+</button>` +
     `<button class="dw-ungroup" title="remove from its group" type="button">⊟</button>` +
+    `<button class="dw-pin" title="pin to screen / release back into z-space" type="button">📌</button>` +
     `<button class="dw-ret" title="retract — dock beside its tower, still in view" type="button">⇱</button>` +
     `<button class="dw-min" title="minimize — pull back to its tower" type="button">−</button>` +
     `<button class="dw-max" title="maximize / restore (ctrl+m)" type="button">⤢</button>` +
@@ -162,7 +163,7 @@ export function openDocWindow(f) {
     fontPx: 13, native: nativeView(f.name),
     minimized: false, chip: null, retracted: false,
     size: { w: W, h: H },
-    group: null, gz: null, _groupScale: 1,
+    group: null, gz: null, _groupScale: 1, pinned: false,
   };
   if (win.native && !f.name.toLowerCase().endsWith('.pdf'))
     el.querySelectorAll('.dw-fz').forEach((b) => (b.style.display = 'none'));
@@ -177,6 +178,10 @@ export function openDocWindow(f) {
     win.maximized = true;
     el.classList.add('maximized');
   }
+
+  // Born IN the construct space: anchor at the creation spot (the default).
+  // The phone sheet is screen-space by nature and skips it.
+  if (!mobileSheet) soloAnchor(win);
 
   // entrance (the reader's own motion language)
   if (!reduced) animate(el, { opacity: [0, 1], scale: [0.94, 1], y: [12, 0] }, { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] });
@@ -236,6 +241,17 @@ export function openDocWindow(f) {
   el.querySelector('.dw-min').addEventListener('click', () => minimizeDocWindow(win));
   el.querySelector('.dw-ret').addEventListener('click', () => toggleRetract(win));
   el.querySelector('.dw-ungroup').addEventListener('click', () => ungroupWindow(win));
+  el.querySelector('.dw-pin').addEventListener('click', () => {
+    if (win.pinned) {
+      win.pinned = false;
+      el.classList.remove('pinned');
+      soloAnchor(win); // release: re-enter z-space right where it sits
+    } else {
+      leaveGroup(win); // pin: hold this screen spot while the world moves
+      win.pinned = true;
+      el.classList.add('pinned');
+    }
+  });
   // a retracted card expands on click anywhere (buttons keep their own actions)
   el.addEventListener('click', (e) => {
     if (win.retracted && !e.target.closest('button')) toggleRetract(win);
@@ -278,7 +294,7 @@ async function loadContent(win) {
 export function closeDocWindow(id) {
   const win = docWindows.get(id);
   if (!win) return;
-  if (win.group) ungroupWindow(win);
+  if (win.group) leaveGroup(win);
   if (win.pdf && win.pdf.io) win.pdf.io.disconnect();
   docWindows.delete(id);
   markRow(win, false);
@@ -370,7 +386,10 @@ export function groupWindows(a, b) {
   if (a === b || a.minimized || b.minimized || a.retracted || b.retracted) return;
   const map = screenZMap();
   if (!map) return;
+  if (a.group) leaveGroup(a); // a window brings itself, not its old group
   let gid = b.group;
+  const gb = gid && groups.get(gid);
+  if (gb && gb.solo) { gb.solo = false; gb.label = 'GROUP ' + ++groupSeq; }
   if (!gid) {
     gid = 'g' + ++groupSeq;
     groups.set(gid, { zoomRef: zoomMag(), label: 'GROUP ' + groupSeq });
@@ -384,15 +403,41 @@ export function groupWindows(a, b) {
   for (const w of [a, b]) w.el.classList.add('grouped');
 }
 
-export function ungroupWindow(w) {
+/** Fully leave z-management (retract/minimize/pin — states with their own
+ * anchoring). A DECORATED group collapsing to one member demotes to a solo
+ * carrier rather than dumping the survivor to the screen. */
+export function leaveGroup(w) {
   const gid = w.group;
   if (!gid) return;
   w.group = null; w.gz = null;
   w.el.classList.remove('grouped');
   w.el.style.transform = '';
   const members = [...docWindows.values()].filter((x) => x.group === gid);
-  if (members.length === 1) ungroupWindow(members[0]); // a group of one is free
+  const g = groups.get(gid);
+  if (members.length === 1 && g && !g.solo) { g.solo = true; g.label = ''; }
   if (members.length === 0) groups.delete(gid);
+}
+
+/** Anchor a window in z-space AT ITS CURRENT SCREEN SPOT as a group-of-one —
+ * the DEFAULT life of a window (user 2026-08-27: windows behave as though they
+ * are in the 3D construct space where they were created; screen-lock is the
+ * deliberate exception, via the pin). zoomRef = the zoom of the moment, so it
+ * opens at natural size and scales from there. */
+export function soloAnchor(win) {
+  if (win.group || win.pinned || win.maximized || win.minimized || win.retracted) return;
+  const map = screenZMap();
+  if (!map) return;
+  const gid = 'g' + ++groupSeq;
+  groups.set(gid, { zoomRef: zoomMag(), label: '', solo: true });
+  win.group = gid;
+  const r = win.el.getBoundingClientRect();
+  win.gz = map.toZ(r.x + r.width / 2, r.y + r.height / 2);
+}
+
+/** The ⊟ action: out of the SHARED group, back to your own spot in z-space. */
+export function ungroupWindow(w) {
+  leaveGroup(w);
+  soloAnchor(w);
 }
 
 function groupsLayer() {
@@ -489,6 +534,7 @@ function stepGroups() {
     w.el.style.top = Math.round(c.y - bh / 2) + 'px';
     w.el.style.transformOrigin = 'center';
     w._groupScale = sc; // the float transform composes with this in stepDocWindows
+    if (g.solo) continue; // solo carriers are invisible z-frames, not GROUP chrome
     const r = { x0: c.x - (bw * sc) / 2, y0: c.y - (bh * sc) / 2, x1: c.x + (bw * sc) / 2, y1: c.y + (bh * sc) / 2 };
     const b = bounds.get(w.group);
     bounds.set(w.group, b ? { x0: Math.min(b.x0, r.x0), y0: Math.min(b.y0, r.y0), x1: Math.max(b.x1, r.x1), y1: Math.max(b.y1, r.y1) } : r);
@@ -540,7 +586,7 @@ export function minimizeDocWindow(win) {
   if (win.minimized) return;
   if (win.maximized) toggleMaximize(win);
   if (win.retracted) { win.retracted = false; win.el.classList.remove('retracted'); }
-  if (win.group) ungroupWindow(win);
+  if (win.group) leaveGroup(win);
   win.minimized = true;
   const a = anchorScreen(win) || { x: innerWidth / 2, y: innerHeight * 0.7 };
   const r = win.el.getBoundingClientRect();
@@ -600,7 +646,7 @@ export function restoreDocWindow(win) {
 export function toggleRetract(win) {
   if (win.minimized) return;
   if (win.maximized) toggleMaximize(win);
-  if (!win.retracted && win.group) ungroupWindow(win);
+  if (!win.retracted && win.group) leaveGroup(win);
   win.retracted = !win.retracted;
   win.el.classList.toggle('retracted', win.retracted);
   if (!win.retracted) {

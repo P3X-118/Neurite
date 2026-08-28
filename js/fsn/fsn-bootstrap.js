@@ -225,7 +225,15 @@ export async function bootFsnSubstrate() {
   // presses by target — presses on nodes / panel / labels target those elements
   // and are ignored here. Neurite's own camera-drag is gated at the source
   // (interface.js onMouseDown, fsnOwnsCamera), so no propagation games.
-  const isBackground = (t) => t === canvas || (t && t.id === 'svg_bg') || t === document.body;
+  // An INERT document window is background as far as the camera is concerned:
+  // its frame ignores the pointer, so a drag across it must orbit the world
+  // rather than die on the window (the iframe used to swallow it entirely).
+  // The bar stays excluded — that is the window's own drag handle.
+  const isInertDoc = (t) => {
+    const w = t && t.closest && t.closest('.fsn-docwin');
+    return !!w && !w.classList.contains('content-active') && !(t.closest('.dw-bar'));
+  };
+  const isBackground = (t) => t === canvas || (t && t.id === 'svg_bg') || t === document.body || isInertDoc(t);
   let orbiting = false, btn = 0, moved = 0, px0 = 0, py0 = 0, lx = 0, ly = 0;
   let pendingFileZoom = 0; // single-click file-zoom, cancelled by dblclick-open
   // TOUCH: pointers on the background are tracked for gestures — one finger
@@ -245,6 +253,7 @@ export async function bootFsnSubstrate() {
   };
   addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.button !== 2) return;
+    if (isBackground(e.target) && globalThis.fsnDisarmContent) globalThis.fsnDisarmContent();
     if (!isBackground(e.target)) return;
     bgPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     // Drag-THROUGH (user-directed 2026-08-17): capture the pointer on the

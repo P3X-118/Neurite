@@ -1003,6 +1003,18 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
   font: 12px "Courier New", monospace; }
 /* the screen-pin: dim while the window lives in z-space (the default), lit
    while pinned to the view. Meaningless on the phone sheet. */
+/* Content-inert by default: the pointer falls THROUGH to the camera, so a
+   drag across an open document orbits the world instead of dying in the iframe.
+   One click on the window arms the content (see .content-active). */
+.fsn-docwin .dw-frame { pointer-events: none; }
+.fsn-docwin.content-active .dw-frame { pointer-events: auto; }
+/* the affordance: an inert window says so, faintly, until you click it */
+.fsn-docwin:not(.content-active) .dw-bar::after {
+  content: "click to read"; margin-left: 8px; opacity: 0.5;
+  font: 10px "Courier New", monospace; color: #9ff3e0; letter-spacing: 0.04em;
+}
+.fsn-docwin.content-active { outline: 1px solid rgba(95, 230, 208, 0.5); }
+
 .dw-pin { min-width: 28px; height: 24px; cursor: pointer;
   background: rgba(95, 230, 208, 0.08); color: #9ff3e0; opacity: 0.45;
   border: 1px solid rgba(95, 230, 208, 0.4); border-radius: 2px;

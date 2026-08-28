@@ -188,6 +188,14 @@ export function openDocWindow(f) {
 
   // focus-to-front
   el.addEventListener('pointerdown', () => { el.style.zIndex = ++zTop; });
+  // Arm the content on a click (never on a drag — a drag is a camera move that
+  // merely happened to start over the window).
+  // Arm the content on a click (never on a drag — a drag is a camera move that
+  // merely happened to start over the window).
+  el.addEventListener('pointerup', (e) => {
+    if (e.target.closest('button') || win.dragging) return;
+    if (!el.classList.contains('content-active')) armContent(win);
+  });
   // drag by the bar (buttons excluded)
   const bar = el.querySelector('.dw-bar');
   let dx = 0, dy = 0;
@@ -327,6 +335,50 @@ export function toggleMaximize(win) {
   }, { duration: 0.3, ease: [0.2, 0.8, 0.2, 1] });
 }
 
+let wasMobileSheet = matchMedia('(max-width: 700px)').matches;
+
+/** Re-shape open windows when the phone breakpoint is CROSSED. Windows are sized
+ * once at creation, so without this a rotate (or any resize past 700px) leaves a
+ * desktop-width window clipped on a phone — and the reverse leaves a full-bleed
+ * sheet stuck after returning to desktop. Only fires on an actual crossing, so
+ * ordinary resizing never fights the user's own drag/placement. */
+function reflowDocWindows() {
+  const isMobile = matchMedia('(max-width: 700px)').matches;
+  if (isMobile === wasMobileSheet) return;
+  wasMobileSheet = isMobile;
+  for (const win of docWindows.values()) {
+    if (win.minimized) continue;
+    if (isMobile) {
+      // the phone reading sheet is a CSS class; inline desktop sizing would win
+      win.el.style.width = '';
+      win.el.style.height = '';
+      win.el.style.left = '';
+      win.el.style.top = '';
+      win.el.style.transform = '';
+      if (win.group) leaveGroup(win); // z-anchoring is meaningless for a full sheet
+      win.pinned = false;
+      win.el.classList.remove('pinned');
+      win.maximized = true;
+      win.el.classList.add('maximized');
+    } else {
+      win.maximized = false;
+      win.el.classList.remove('maximized');
+      const W = Math.max(440, Math.min(700, innerWidth - 300));
+      const H = Math.max(360, Math.min(620, Math.round(innerHeight * 0.74)));
+      win.size = { w: W, h: H };
+      win.el.style.width = W + 'px';
+      win.el.style.height = H + 'px';
+      const x = Math.max(258, Math.min(innerWidth - W - 12, win.home ? win.home.x : innerWidth * 0.5));
+      const y = Math.max(40, Math.min(Math.max(44, innerHeight - H - 12), win.home ? win.home.y : 80));
+      win.home = { x, y };
+      win.el.style.left = x + 'px';
+      win.el.style.top = y + 'px';
+      soloAnchor(win); // re-enter z-space where it now sits
+    }
+  }
+}
+addEventListener('resize', reflowDocWindows);
+
 /** Screen position of a window's file-box anchor (CSS px), or null. */
 function anchorScreen(win) {
   const fsn = globalThis.fsnHandle && globalThis.fsnHandle();
@@ -403,6 +455,21 @@ export function groupWindows(a, b) {
   for (const w of [a, b]) w.el.classList.add('grouped');
 }
 
+/** Make ONE window's content interactive; every other window goes inert so the
+ * camera stays drivable across the rest of the screen. */
+export function armContent(win) {
+  for (const w of docWindows.values()) {
+    if (w === win) continue;
+    w.el.classList.remove('content-active');
+  }
+  if (win) win.el.classList.add('content-active');
+}
+
+/** Disarm all content (a background press) — the next drag anywhere is camera. */
+export function disarmContent() {
+  for (const w of docWindows.values()) w.el.classList.remove('content-active');
+}
+
 /** Fully leave z-management (retract/minimize/pin — states with their own
  * anchoring). A DECORATED group collapsing to one member demotes to a solo
  * carrier rather than dumping the survivor to the screen. */
@@ -431,7 +498,13 @@ export function soloAnchor(win) {
   groups.set(gid, { zoomRef: zoomMag(), label: '', solo: true });
   win.group = gid;
   const r = win.el.getBoundingClientRect();
-  win.gz = map.toZ(r.x + r.width / 2, r.y + r.height / 2);
+  const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+  win.gz = map.toZ(cx, cy); // kept: the fallback when the anchor is unprojectable
+  // A solo window rides its FILE in the 3D construct, offset by wherever it was
+  // opened. Storing the offset (rather than an absolute screen spot) is what
+  // lets it hold its relationship to the tower through orbit, fly and zoom.
+  const a = anchorScreen(win);
+  win.anchorOff = a ? { dx: cx - a.x, dy: cy - a.y, ref: zoomMag() || 1 } : null;
 }
 
 /** The ⊟ action: out of the SHARED group, back to your own spot in z-space. */
@@ -528,7 +601,19 @@ function stepGroups() {
     const g = groups.get(w.group);
     if (!g) { w.group = null; continue; }
     const sc = Math.max(0.35, Math.min(2.2, g.zoomRef / zm)); // readability clamp
-    const c = map.toScreen(w.gz);
+    let c;
+    if (g.solo) {
+      // 3D-anchored: follows orbit and fly, not just pan/zoom.
+      const a = w.anchorOff && anchorScreen(w);
+      if (a) {
+        const k = w.anchorOff.ref ? Math.max(0.35, Math.min(2.2, zm ? w.anchorOff.ref / zm : 1)) : 1;
+        c = { x: a.x + w.anchorOff.dx * k, y: a.y + w.anchorOff.dy * k };
+      } else {
+        c = map.toScreen(w.gz); // anchor behind the camera — hold the z-plane spot
+      }
+    } else {
+      c = map.toScreen(w.gz);
+    }
     const bw = (w.size ? w.size.w : 440), bh = (w.size ? w.size.h : 360);
     w.el.style.left = Math.round(c.x - bw / 2) + 'px';
     w.el.style.top = Math.round(c.y - bh / 2) + 'px';

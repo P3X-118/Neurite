@@ -300,7 +300,28 @@ class PageLoad {
     async mainLoad(){
         for (const resource of PageLoad.resources) await this.loadResource(resource); // sequentially
         await this.loadTabs(PageLoad.tabs); // in parallel
-        for (const src of PageLoad.scripts) await this.loadScript(src); // sequentially
+        // TRANSFER in parallel, EXECUTE in order. These ~80 classic scripts are
+        // interdependent, so execution order is preserved exactly — but loading
+        // them one round-trip at a time put `Graph` (the z-camera) ~30s after
+        // DOMContentLoaded on a loaded host. Everything z-anchored is frozen
+        // until Graph exists, so a document opened in that window stayed stuck
+        // where it spawned: the "locked to the viewport" report. Now the wall
+        // cost is the slowest single fetch, not the sum of all of them.
+        // A fetch that fails falls back to the ordinary <script src> path, so a
+        // hiccup degrades to the old behaviour instead of breaking boot.
+        const fetched = await Promise.all(PageLoad.scripts.map(async (src)=>{
+            if (src.endsWith(':MODULE')) return { src, text: null }; // module: keep native loading
+            try {
+                const r = await fetch(src);
+                return { src, text: r.ok ? await r.text() : null };
+            } catch (e) { return { src, text: null } }
+        }));
+        for (const { src, text } of fetched) {
+            if (text === null) { await this.loadScript(src); continue }
+            const script = document.createElement('script');
+            script.textContent = text + '\n//# sourceURL=' + src; // keep stack traces attributable
+            document.body.appendChild(script);
+        }
         Graph = new Graph();
         window.Graph = Graph; // Design B: expose the live Graph instance so the
         window.Autopilot = Autopilot;        // Design B: fsn fullscreen fly-in/out (const in global-lexical scope)

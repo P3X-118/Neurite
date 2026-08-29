@@ -8,7 +8,7 @@
 // + content pipeline (native PDF/image via iframe src, text rendered, binary
 // detected), FIXED pixel scale (never coupled to Graph.zoom — that was the
 // broken zoom UX of the Neurite nodes), a slight ambient float, and a FLUID
-// curved tether to its file box on the tower. ⤢ maximizes into a full reading
+// curved tether to its file box on the tower. □ maximizes into a full reading
 // view (FLIP-animated); windows are draggable and z-stack on focus.
 import { animate } from './motion.mjs';
 
@@ -40,7 +40,7 @@ const textDoc = (name, text) =>
   `<!doctype html><body style="margin:0;padding:18px 22px;background:#04100f;color:#b8efe2;` +
   `font:13px/1.55 'Courier New',monospace;-webkit-user-select:text;user-select:text">` +
   `<div style="max-width:78ch;margin:0 auto">` + // reading measure — long docs stay readable maximized
-  `<div style="color:#5fe6d0;border-bottom:1px solid #0a5548;padding-bottom:8px;margin-bottom:14px">▤ ${esc(name)}</div>` +
+  `<div style="color:#5fe6d0;border-bottom:1px solid #0a5548;padding-bottom:8px;margin-bottom:14px">≡ ${esc(name)}</div>` +
   `<div style="white-space:pre-wrap;word-break:break-word">${esc(text)}</div></div></body>`;
 
 /** PDF rendering via pdf.js (already on the page from Neurite's imports) —
@@ -117,16 +117,16 @@ export function openDocWindow(f) {
   el.id = id;
   el.innerHTML =
     `<div class="dw-bar">` +
-    `<span class="dw-title">▤ ${esc(f.name)}</span>` +
+    `<span class="dw-title">≡ ${esc(f.name)}</span>` +
     `<span class="dw-path">${esc(f.source)} : ${esc(f.path)}</span>` +
     `<button class="dw-fz" data-d="-1" title="smaller text" type="button">A−</button>` +
     `<button class="dw-fz" data-d="1" title="larger text" type="button">A+</button>` +
-    `<button class="dw-ungroup" title="remove from its group" type="button">⊟</button>` +
-    `<button class="dw-pin" title="pin to screen / release back into z-space" type="button">📌</button>` +
-    `<button class="dw-ret" title="retract — dock beside its tower, still in view" type="button">⇱</button>` +
+    `<button class="dw-ungroup" title="remove from its group" type="button">−G</button>` +
+    `<button class="dw-pin" title="pin to screen / release back into z-space" type="button">PIN</button>` +
+    `<button class="dw-ret" title="retract — dock beside its tower, still in view" type="button">↖</button>` +
     `<button class="dw-min" title="minimize — pull back to its tower" type="button">−</button>` +
-    `<button class="dw-max" title="maximize / restore (ctrl+m)" type="button">⤢</button>` +
-    `<button class="dw-close" title="close" type="button">✕</button>` +
+    `<button class="dw-max" title="maximize / restore (ctrl+m)" type="button">□</button>` +
+    `<button class="dw-close" title="close" type="button">×</button>` +
     `</div>` +
     `<iframe class="dw-frame" sandbox="allow-same-origin"></iframe>`;
   document.body.appendChild(el);
@@ -173,7 +173,7 @@ export function openDocWindow(f) {
 
   // Phones: a 440px floating window can't float on a 375px viewport — open as a
   // full reading sheet (standalone mobile-reader parity). − still docks it to
-  // the tower; ⤢ toggles back to the sheet.
+  // the tower; □ toggles back to the sheet.
   if (matchMedia('(max-width: 700px)').matches) {
     win.maximized = true;
     el.classList.add('maximized');
@@ -290,7 +290,7 @@ async function loadContent(win) {
     const junk = [...text.slice(0, 4000)].filter((ch) => ch === '�').length;
     if (junk > 12) {
       win.body.srcdoc = textDoc(win.name, '') .replace('</body>',
-        `<div>▤ binary format — <a style="color:#7fffe0" href="${esc(url)}" target="_blank" rel="noopener">open the raw file ⇗</a></div></body>`);
+        `<div>≡ binary format — <a style="color:#7fffe0" href="${esc(url)}" target="_blank" rel="noopener">open the raw file →</a></div></body>`);
       return;
     }
     win.body.srcdoc = textDoc(win.name, text);
@@ -397,7 +397,7 @@ function anchorScreen(win) {
 // A group is a z-space frame: each member stores its Graph-z position (w.gz)
 // and the group's reference zoom. Camera zoom then moves AND scales the whole
 // set coherently (Neurite-native behavior, opted into by grouping); free
-// windows stay screen-fixed. Formed by DROPPING one window onto another; ⊟
+// windows stay screen-fixed. Formed by DROPPING one window onto another; −G
 // ungroups. Suspended while dragging/maximized/minimized/retracted/construct.
 let groupSeq = 0;
 const groups = new Map(); // gid -> { zoomRef, label }
@@ -507,7 +507,7 @@ export function soloAnchor(win) {
   win.anchorOff = a ? { dx: cx - a.x, dy: cy - a.y, ref: zoomMag() || 1 } : null;
 }
 
-/** The ⊟ action: out of the SHARED group, back to your own spot in z-space. */
+/** The −G action: out of the SHARED group, back to your own spot in z-space. */
 export function ungroupWindow(w) {
   leaveGroup(w);
   soloAnchor(w);
@@ -698,7 +698,7 @@ export function minimizeDocWindow(win) {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'fsn-dockchip';
-      chip.textContent = '▤ ' + win.name;
+      chip.textContent = '≡ ' + win.name;
       chip.title = 'restore ' + win.name;
       chip.addEventListener('click', () => restoreDocWindow(win));
       chipsLayer().appendChild(chip);
@@ -741,7 +741,7 @@ export function restoreDocWindow(win) {
 /** RETRACT (user-directed 2026-08-17): the document stays IN VIEW SPACE as a
  * compact card that RIDES its tower — per-frame anchored to the file box's
  * projection (so it is no longer locked to screen space while zooming), with a
- * short tether. Click the card (or ⇱ again) to expand back to the floating
+ * short tether. Click the card (or ↖ again) to expand back to the floating
  * reading window at that spot. */
 export function toggleRetract(win) {
   if (win.minimized) return;
@@ -810,7 +810,7 @@ function stepRemoteChips(placed) {
         chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'fsn-dockchip remote';
-        chip.textContent = '▤ ' + d.name;
+        chip.textContent = '≡ ' + d.name;
         chip.title = 'restore ' + d.name + ' (opens in its own window)';
         chip.addEventListener('click', () => {
           if (globalThis.fsnMosaic) globalThis.fsnMosaic.requestDocRestore(owner, d.path);

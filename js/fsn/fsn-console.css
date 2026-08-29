@@ -844,7 +844,7 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
   cursor: grab; user-select: none; touch-action: none;
 }
 .dw-bar:active { cursor: grabbing; }
-.dw-title { color: #9ff3e0; font-size: 12px; letter-spacing: 0.06em; white-space: nowrap; }
+.dw-title { color: #9ff3e0; font-size: 12px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .dw-path {
   color: #4a8f80; font-size: 10px; flex: 1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1050,6 +1050,9 @@ body.panel-collapsed .fsn-docwin.maximized { left: 8px !important; width: calc(1
 /* Mobile ergonomics (44px touch standard): bar controls, carets, chips. */
 @media (max-width: 700px) {
   .fsn-docwin .dw-bar { padding: 8px; gap: 6px; }
+  /* the sheet is full-screen on phones: group/dock/maximize are meaningless
+     there, and eight buttons overflow 375px (the close button fell off-screen) */
+  .fsn-docwin .dw-ungroup, .fsn-docwin .dw-ret, .fsn-docwin .dw-max, .fsn-docwin .dw-path { display: none; }
   .dw-fz, .dw-min, .dw-max, .dw-close, .dw-ret {
     min-width: 40px !important; height: 38px !important; font-size: 15px !important;
   }

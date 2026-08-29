@@ -1,4 +1,4 @@
-    <button id="panel-toggle" type="button" aria-label="toggle navigator panel">☰</button>
+    <button id="panel-toggle" type="button" aria-label="toggle navigator panel">≡</button>
     <aside id="tree">
       <div class="title">File System Navigator</div>
       <div id="session-info">◇ …</div>
@@ -19,18 +19,18 @@
       </div>
       <section id="status">
         <div class="title">Status</div>
-        <div id="status-banner" class="hidden">⚠ DEMO TREE — backend unreachable</div>
+        <div id="status-banner" class="hidden">[!] DEMO TREE — backend unreachable</div>
         <div id="status-rows"></div>
       </section>
       <section id="ephem" class="hidden">
-        <div class="eh">⤓ Ephemeral · by reference<button id="ephem-clear" type="button">✕ clear</button></div>
+        <div class="eh">↓ Ephemeral · by reference<button id="ephem-clear" type="button">× clear</button></div>
         <div id="ephem-rows"></div>
         <div class="ef">by reference · not duplicated or shared · clears on board exit</div>
       </section>
       <section id="transfers">
         <div class="title">Transfers</div>
         <div class="tor-actions">
-          <button id="tor-seed" type="button">⇅ seed focused dir</button>
+          <button id="tor-seed" type="button">↑↓ seed focused dir</button>
           <div class="tor-addrow">
             <input id="tor-magnet" type="text" placeholder="magnet:?xt=…" spellcheck="false" />
             <button id="tor-add" type="button">add</button>
@@ -49,20 +49,20 @@
           <button data-fmt="image" type="button">shot</button>
           <button data-fmt="pdf" type="button">pdf</button>
         </span>
-        <button id="reader-bring" class="hidden" type="button">⤓ bring sources</button>
+        <button id="reader-bring" class="hidden" type="button">↓ bring sources</button>
         <span class="reader-badge">Linkwarden · Archive</span>
-        <button id="reader-close" type="button">✕</button>
+        <button id="reader-close" type="button">×</button>
       </div>
       <iframe id="reader-frame" sandbox="allow-same-origin"></iframe>
     </div>
     <div id="ctxmenu" class="hidden">
-      <button data-act="fly" type="button">▸ Fly to</button>
-      <button data-act="bring" type="button">⤓ Bring here</button>
-      <button data-act="tag" type="button">⌗ Tag…</button>
-      <button data-act="ask" type="button">⌁ Ask agent</button>
-      <button data-act="reader" type="button">◱ Open archive</button>
-      <button data-act="copy" type="button">⧉ Copy path</button>
-      <button data-act="props" type="button">ⓘ Properties</button>
+      <button data-act="fly" type="button">► Fly to</button>
+      <button data-act="bring" type="button">↓ Bring here</button>
+      <button data-act="tag" type="button"># Tag…</button>
+      <button data-act="ask" type="button">? Ask agent</button>
+      <button data-act="reader" type="button">□ Open archive</button>
+      <button data-act="copy" type="button">» Copy path</button>
+      <button data-act="props" type="button">i Properties</button>
     </div>
     <div id="hint">drag: orbit · wheel: zoom · click dir / panel: fly · esc: overview · ctrl+m: maximize window</div>
     <button id="session-btn" type="button">sign in</button>

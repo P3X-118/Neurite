@@ -4,7 +4,7 @@
 // embed boots, so the REAL `web_ui` (Rust) drives the same DOM it drives in the
 // standalone app. Markup + CSS are extracted from ~/apps/IRIX/index.html; the
 // chrome script below is the same inline module that page ships (motion layer,
-// mobile ☰ panel, Ctrl+M maximize), with the motion.dev import path localized.
+// mobile ≡ panel, Ctrl+M maximize), with the motion.dev import path localized.
 import { animate } from './motion.mjs';
 
 export async function mountFsnConsole() {
@@ -39,7 +39,7 @@ function wireChrome() {
     }).observe(el, { attributes: true, attributeFilter: ['class'] });
   }
 
-  // Mobile ☰: toggle the off-canvas panel; choosing a row closes it.
+  // Mobile ≡: toggle the off-canvas panel; choosing a row closes it.
   const panelToggle = document.getElementById('panel-toggle');
   panelToggle?.addEventListener('click', () => document.body.classList.toggle('panel-open'));
   document.getElementById('tree')?.addEventListener('click', (e) => {
@@ -95,8 +95,8 @@ function wireChrome() {
   document.body.appendChild(bar);
   // adopt the existing controls into the bar (handlers stay bound)
   const adopt = (id) => { const el = document.getElementById(id); if (el) { el.classList.add('tb-item'); bar.appendChild(el); } };
-  adopt('panel-toggle'); // mobile ☰ leads the bar
-  bar.appendChild(bar.querySelector('.tb-brand')); // brand after ☰
+  adopt('panel-toggle'); // mobile ≡ leads the bar
+  bar.appendChild(bar.querySelector('.tb-brand')); // brand after ≡
   bar.appendChild(bar.querySelector('.tb-fill'));
 
   // ---- navigator motion (user-directed 2026-08-16): more screen space for
@@ -106,10 +106,10 @@ function wireChrome() {
   tab.id = 'panel-collapse';
   tab.type = 'button';
   tab.title = 'collapse / expand the navigator (more room to read)';
-  tab.textContent = '⟨';
+  tab.textContent = '‹';
   tab.addEventListener('click', () => {
     const collapsed = document.body.classList.toggle('panel-collapsed');
-    tab.textContent = collapsed ? '⟩' : '⟨';
+    tab.textContent = collapsed ? '›' : '‹';
   });
   document.body.appendChild(tab);
 
@@ -143,13 +143,13 @@ function wireChrome() {
       const caret = document.createElement('button');
       caret.type = 'button';
       caret.className = 'row-caret';
-      caret.textContent = collapsedDirs.has(keyOf(r)) ? '▸' : '▾';
+      caret.textContent = collapsedDirs.has(keyOf(r)) ? '►' : '▼';
       caret.addEventListener('click', (e) => {
         e.stopPropagation(); // the row body still flies; the caret only folds
         const key = keyOf(r);
         const closing = !collapsedDirs.has(key);
         if (closing) collapsedDirs.add(key); else collapsedDirs.delete(key);
-        caret.textContent = closing ? '▸' : '▾';
+        caret.textContent = closing ? '►' : '▼';
         const kids = [...rowsBox.children].filter((k) => isUnder(k, r.dataset.source, r.dataset.path || '/'));
         if (reduced) { applyCollapsed(); return; }
         if (closing) {
@@ -192,7 +192,7 @@ function wireChrome() {
   const ex = document.createElement('button');
   ex.id = 'mosaic-expand';
   ex.type = 'button';
-  ex.textContent = '⧉ expand view';
+  ex.textContent = '□ expand view';
   ex.title = 'Open another window that extends this landscape (drag it to a second screen)';
   ex.addEventListener('click', () => { if (globalThis.fsnMosaic) globalThis.fsnMosaic.openFollowerWindow(); });
   ex.classList.add('tb-item');

@@ -309,7 +309,7 @@ export function fsnMenuActions(menu, x, y) {
       if (rpath && rpath !== '/') {
         // zoom the right-clicked tower toward focus while the menu is showing
         if (globalThis.fsnFlyFocus) globalThis.fsnFlyFocus({ ped: floor });
-        menu.menu.append(menu.option('⌁ Expand documents  ' + rname, () => {
+        menu.menu.append(menu.option('≡ Expand documents  ' + rname, () => {
           const n = expandDirDocs(rsrc, rpath);
           if (!n && globalThis.fsnEnterPathSynced) globalThis.fsnEnterPathSynced(rpath); // no docs in scene -> enter instead
         }));
@@ -324,10 +324,10 @@ export function fsnMenuActions(menu, x, y) {
   }
   const blooms = docWindows.size;
   if (constructActive) {
-    menu.menu.append(menu.option('◉ Exit construct', () => fsnExitConstruct()));
+    menu.menu.append(menu.option('● Exit construct', () => fsnExitConstruct()));
     added = true;
   } else if (blooms >= 1) {
-    menu.menu.append(menu.option('⊞ Construct: correlate ' + blooms + ' open doc' + (blooms === 1 ? '' : 's'), () => fsnEnterConstruct('open documents')));
+    menu.menu.append(menu.option('+ Construct: correlate ' + blooms + ' open doc' + (blooms === 1 ? '' : 's'), () => fsnEnterConstruct('open documents')));
     added = true;
   }
   return added;
@@ -337,8 +337,8 @@ export function fsnMenuActions(menu, x, y) {
 export function fsnNodeMenuActions(menu, node) {
   if (!node) return false;
   menu.menu.append(menu.option('\u2922 Fullscreen / exit', () => fsnToggleNodeFullscreen(node)));
-  if (constructActive) menu.menu.append(menu.option('◉ Exit construct', () => fsnExitConstruct()));
-  else menu.menu.append(menu.option('⊞ Correlate in construct', () => fsnEnterConstruct('open documents')));
+  if (constructActive) menu.menu.append(menu.option('● Exit construct', () => fsnExitConstruct()));
+  else menu.menu.append(menu.option('+ Correlate in construct', () => fsnEnterConstruct('open documents')));
   return true;
 }
 
@@ -446,9 +446,9 @@ export function fsnUpdateConstructLinks() {
 function showConstructBanner(label, n) {
   let b = document.getElementById('fsn-construct-banner');
   if (!b) { b = document.createElement('div'); b.id = 'fsn-construct-banner'; document.body.appendChild(b); }
-  b.innerHTML = '<span class="cx-dot">◉</span> CONSTRUCT · correlating <b>' + n + '</b> document' + (n === 1 ? '' : 's') +
+  b.innerHTML = '<span class="cx-dot">●</span> CONSTRUCT · correlating <b>' + n + '</b> document' + (n === 1 ? '' : 's') +
     ' · <span class="cx-tag">' + String(label).replace(/</g, '') + '</span>' +
-    '<button id="fsn-construct-exit">exit ⏎</button>';
+    '<button id="fsn-construct-exit">exit · esc</button>';
   b.style.display = 'flex';
   const btn = document.getElementById('fsn-construct-exit');
   if (btn) btn.onclick = () => { if (globalThis.fsnExitConstruct) globalThis.fsnExitConstruct(); };

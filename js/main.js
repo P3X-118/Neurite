@@ -309,6 +309,29 @@ class PageLoad {
         // cost is the slowest single fetch, not the sum of all of them.
         // A fetch that fails falls back to the ordinary <script src> path, so a
         // hiccup degrades to the old behaviour instead of breaking boot.
+        // ONE round trip beats eighty: the build emits js/boot-bundle.js (the
+        // same scripts, same order, concatenated — scripts/make-boot-bundle.mjs).
+        // Dev serves no bundle and any fetch hiccup falls through to the pooled
+        // per-file path below, so this is a fast path, not a new dependency.
+        try {
+            const rb = await fetch('js/boot-bundle.js');
+            if (rb.ok) {
+                const meta = await fetch('js/boot-bundle.json').then(r => r.ok ? r.json() : null).catch(()=>null);
+                const script = document.createElement('script');
+                script.textContent = await rb.text();
+                document.body.appendChild(script);
+                const leftovers = (meta && meta.skipped) || PageLoad.scripts.filter(s => s.endsWith(':MODULE'));
+                for (const src of leftovers) await this.loadScript(src);
+                Graph = new Graph();
+                window.Graph = Graph;
+                window.Autopilot = Autopilot;
+                window.NeuriteAnimation = Animation;
+                App = new App();
+                window.App = App;
+                App.init();
+                return;
+            }
+        } catch (e) { /* fall through to the pooled path */ }
         // Bounded pool: firing all ~80 fetches at once made Chrome reject the
         // burst wholesale (net::ERR_INSUFFICIENT_RESOURCES), sending every one
         // down the sequential fallback — i.e. no speedup at all. Ten in flight

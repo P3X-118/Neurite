@@ -234,6 +234,18 @@ export async function bootFsnSubstrate() {
     return !!w && !w.classList.contains('content-active') && !(t.closest('.dw-bar'));
   };
   const isBackground = (t) => t === canvas || (t && t.id === 'svg_bg') || t === document.body || isInertDoc(t);
+  // Neurite's zoom listens on the SVG element (On.wheel(svg,...)), and a wheel
+  // over a doc window's <section> — a SIBLING of the svg — never reaches it, so
+  // zoom died over windows even after drags learned to pass through. Forward
+  // the wheel from an INERT window to the svg; an armed (reading) window keeps
+  // its wheel for scrolling the document.
+  addEventListener('wheel', (e) => {
+    if (!isInertDoc(e.target)) return;
+    const svg = document.getElementById('svg_bg');
+    if (!svg) return;
+    e.preventDefault();
+    svg.dispatchEvent(new WheelEvent('wheel', e));
+  }, { capture: true, passive: false });
   let orbiting = false, btn = 0, moved = 0, px0 = 0, py0 = 0, lx = 0, ly = 0;
   let pendingFileZoom = 0; // single-click file-zoom, cancelled by dblclick-open
   // TOUCH: pointers on the background are tracked for gestures — one finger

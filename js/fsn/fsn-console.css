@@ -824,7 +824,10 @@ html.fsn-follower #login { display: none !important; }
   display: flex; flex-direction: column;
   background: #04100f;
   border: 1px solid #0a6; border-top: 2px solid #17b08c;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 18px rgba(23, 176, 140, 0.12);
+  /* Softer + tighter than the old 0.6-alpha/40px: every window casts its
+     shadow across whatever sits beneath it, and stacked windows were visibly
+     darkening each other (reported as dark objects overlapping windows). */
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.32), 0 0 18px rgba(23, 176, 140, 0.12);
   font-family: "Courier New", monospace;
 }
 .fsn-docwin.maximized {

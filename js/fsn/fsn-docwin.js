@@ -591,6 +591,12 @@ export function rebaseDocState(pan, s) {
 function stepGroups() {
   const inConstruct = globalThis.fsnInConstruct && globalThis.fsnInConstruct();
   const layer = document.getElementById('fsn-groups');
+  // LATE JOIN: a window opened before the z-camera was ready has no group yet.
+  // Retry until it takes, or it stays frozen where it was created — which is
+  // exactly the "locked to the viewport" symptom.
+  for (const w of docWindows.values()) {
+    if (!w.group && !w.pinned && !w.maximized && !w.minimized && !w.retracted) soloAnchor(w);
+  }
   if (groups.size === 0 || inConstruct) { if (layer) layer.replaceChildren(); return; }
   const map = screenZMap();
   if (!map) return;

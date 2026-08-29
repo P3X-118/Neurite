@@ -604,6 +604,15 @@ function stepGroups() {
     let c;
     if (g.solo) {
       // 3D-anchored: follows orbit and fly, not just pan/zoom.
+      if (!w.anchorOff) {
+        // late latch — the anchor was unprojectable when the window opened
+        const a0 = anchorScreen(w);
+        if (a0) {
+          const r0 = w.el.getBoundingClientRect();
+          w.anchorOff = { dx: r0.x + r0.width / 2 - a0.x, dy: r0.y + r0.height / 2 - a0.y,
+                          ref: zoomMag() || 1 };
+        }
+      }
       const a = w.anchorOff && anchorScreen(w);
       if (a) {
         const k = w.anchorOff.ref ? Math.max(0.35, Math.min(2.2, zm ? w.anchorOff.ref / zm : 1)) : 1;

@@ -309,13 +309,24 @@ class PageLoad {
         // cost is the slowest single fetch, not the sum of all of them.
         // A fetch that fails falls back to the ordinary <script src> path, so a
         // hiccup degrades to the old behaviour instead of breaking boot.
-        const fetched = await Promise.all(PageLoad.scripts.map(async (src)=>{
-            if (src.endsWith(':MODULE')) return { src, text: null }; // module: keep native loading
-            try {
-                const r = await fetch(src);
-                return { src, text: r.ok ? await r.text() : null };
-            } catch (e) { return { src, text: null } }
-        }));
+        // Bounded pool: firing all ~80 fetches at once made Chrome reject the
+        // burst wholesale (net::ERR_INSUFFICIENT_RESOURCES), sending every one
+        // down the sequential fallback — i.e. no speedup at all. Ten in flight
+        // keeps the pipe full without tripping the per-page connection limits.
+        const fetched = new Array(PageLoad.scripts.length);
+        let next = 0;
+        const worker = async ()=>{
+            while (next < PageLoad.scripts.length) {
+                const i = next++;
+                const src = PageLoad.scripts[i];
+                if (src.endsWith(':MODULE')) { fetched[i] = { src, text: null }; continue }
+                try {
+                    const r = await fetch(src);
+                    fetched[i] = { src, text: r.ok ? await r.text() : null };
+                } catch (e) { fetched[i] = { src, text: null } }
+            }
+        };
+        await Promise.all(Array.from({ length: 10 }, worker));
         for (const { src, text } of fetched) {
             if (text === null) { await this.loadScript(src); continue }
             const script = document.createElement('script');

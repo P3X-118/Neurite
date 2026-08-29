@@ -384,7 +384,11 @@ export async function bootFsnSubstrate() {
     clearTimeout(pendingFileZoom); // opening — don't also fly
     const path = fsnDescendAt(x, y, dpr);
     if (path) {
-      recenter();
+      // Re-FRAME, not just re-center: the re-rooted scene is built at the origin
+      // at level scale, while the camera is still zoomed for whatever was under
+      // the cursor — landing inside giant slabs. Same eased flight as a board
+      // switch: pan to origin, zoom back to the overview framing.
+      flyOverview();
       if (isFol()) mosaic.sendInput({ kind: 'enterPath', path }); // 8c: all windows descend
       console.log('[fsn] descended ->', path);
       return true;
@@ -413,7 +417,7 @@ export async function bootFsnSubstrate() {
     if (!h || !h.enter_path || !path) return '';
     const r = h.enter_path(path);
     if (r) {
-      recenter();
+      flyOverview();
       if (isFol()) mosaic.sendInput({ kind: 'enterPath', path: r });
     }
     return r;

@@ -88,7 +88,17 @@ export async function bootFsnSubstrate() {
     if (t >= 1) flight = null;
   };
   const flyToPedestal = (i) => { const tp = fsnPedestalPan(i); if (tp) flyPanTo(tp, 0.45); };
-  const flyOverview = () => flyPanTo({ x: 0, y: 0 }, 1.0);
+  // Overview zoom that FRAMES the current scene. The filesystem landscape at
+  // boot is the baseline (zoom 1.0); a bigger scene — the geo world is ~3-4x —
+  // gets a proportionally further overview instead of landing inside it.
+  let fsnBaseExtent = 0;
+  const overviewZoom = () => {
+    const h = fsnHandle();
+    const e = h && h.scene_half_extent ? h.scene_half_extent() : 0;
+    if (!e || !fsnBaseExtent) return 1.0;
+    return Math.max(0.05, Math.min(1.0, fsnBaseExtent / e));
+  };
+  const flyOverview = () => flyPanTo({ x: 0, y: 0 }, overviewZoom());
 
   // Stage 8 mosaic: shared world, N viewports. The leader broadcasts the camera
   // + board; followers adopt them and every window renders its own off-axis
@@ -184,6 +194,10 @@ export async function bootFsnSubstrate() {
     rebaseIfNeeded();
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
+    if (!fsnBaseExtent) { // first frames show the boot (filesystem) scene
+      const h = fsnHandle();
+      if (h && h.scene_half_extent) fsnBaseExtent = h.scene_half_extent();
+    }
     const fi = fsnTakeFocus();          // panel fly-to → ease Graph there
     if (fi >= 0) flyToPedestal(fi);
     if (fsnTakeRecenter()) flyOverview(); // board switch → overview

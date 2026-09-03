@@ -88,15 +88,16 @@ export async function bootFsnSubstrate() {
     if (t >= 1) flight = null;
   };
   const flyToPedestal = (i) => { const tp = fsnPedestalPan(i); if (tp) flyPanTo(tp, 0.45); };
-  // Overview zoom that FRAMES the current scene. The filesystem landscape at
-  // boot is the baseline (zoom 1.0); a bigger scene — the geo world is ~3-4x —
-  // gets a proportionally further overview instead of landing inside it.
+  // Overview zoom that FRAMES the current scene. Graph.zoom is the SIZE of the
+  // view window (a file close-up is ~0.2; wheel-out grows it), so a bigger scene
+  // needs a bigger zoom: the filesystem landscape at boot is the baseline (1.0)
+  // and the geo world (~2.5x its extent) gets ~2.5 — never closer than 1.0.
   let fsnBaseExtent = 0;
   const overviewZoom = () => {
     const h = fsnHandle();
     const e = h && h.scene_half_extent ? h.scene_half_extent() : 0;
     if (!e || !fsnBaseExtent) return 1.0;
-    return Math.max(0.05, Math.min(1.0, fsnBaseExtent / e));
+    return Math.max(1.0, Math.min(8.0, e / fsnBaseExtent));
   };
   const flyOverview = () => flyPanTo({ x: 0, y: 0 }, overviewZoom());
 

@@ -311,10 +311,10 @@ export class FsnEmbed {
         wasm.fsnembed_resize(this.__wbg_ptr, width, height);
     }
     /**
-     * Half-extent of the current scene on the ground plane (max |x|,|z| over
-     * pedestal pick bounds). The host divides its boot-time baseline by this to
-     * pick an overview zoom that FRAMES the scene — the geo world is ~3-4x the
-     * filesystem landscape, and a fixed zoom 1.0 overview would land inside it.
+     * Half-extent of the current scene on the ground plane (pedestals AND
+     * boxes — see `scene_extent_of`). The host divides its boot-time baseline
+     * by this to pick an overview zoom that FRAMES the scene — the geo world is
+     * ~3-4x the filesystem landscape, and a fixed zoom 1.0 would land inside it.
      * @returns {number}
      */
     scene_half_extent() {

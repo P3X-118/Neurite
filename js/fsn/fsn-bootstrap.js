@@ -99,7 +99,21 @@ export async function bootFsnSubstrate() {
     if (!e || !fsnBaseExtent) return 1.0;
     return Math.max(1.0, Math.min(8.0, e / fsnBaseExtent));
   };
-  const flyOverview = () => flyPanTo({ x: 0, y: 0 }, overviewZoom());
+  // CONSTELLATIONS: every board (and the World map) is a cluster at its own slot
+  // on the z-plane. The ACTIVE cluster is the thing to frame after a board
+  // switch or a descent; the constellation itself is the Esc overview.
+  const flyToActive = () => {
+    const h = fsnHandle();
+    const a = h && h.active_anchor ? h.active_anchor() : null;
+    flyPanTo(a ? fsnWorldToPan(a[0], a[1]) : { x: 0, y: 0 }, overviewZoom());
+  };
+  const flyConstellation = () => {
+    const h = fsnHandle();
+    const e = h && h.constellation_extent ? h.constellation_extent() : 0;
+    const z = (e && fsnBaseExtent) ? Math.max(1.0, Math.min(16.0, e / fsnBaseExtent)) : 1.0;
+    flyPanTo({ x: 0, y: 0 }, z);
+  };
+  const flyOverview = flyToActive;
 
   // Stage 8 mosaic: shared world, N viewports. The leader broadcasts the camera
   // + board; followers adopt them and every window renders its own off-axis
@@ -377,7 +391,7 @@ export async function bootFsnSubstrate() {
   addEventListener('wheel', () => { flight = null; }, { passive: true });
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !fsnInConstruct() && !/^(INPUT|TEXTAREA)$/.test(e.target && e.target.tagName || '')) {
-      flyOverview(); // standalone parity: Esc returns to the overview
+      flyConstellation(); // Esc: pull back to the whole constellation
     }
   });
   addEventListener('contextmenu', (e) => { if (orbiting) e.preventDefault(); });

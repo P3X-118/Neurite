@@ -348,6 +348,16 @@ export async function bootFsnSubstrate() {
     // Fingers wobble more than mice — a looser tap tolerance on touch.
     if (btn === 0 && moved < (e.pointerType === 'touch' ? 12 : 6)) {
       const h = fsnHandle();
+      // A CLUSTER chip names an organization at constellation zoom. Chips are
+      // pointer-events:none (a chip that captured the pointer used to swallow
+      // orbit drags), so they are hit-tested HERE, in the path that already
+      // knows a click from a drag.
+      const ci = h && h.cluster_at ? h.cluster_at(e.clientX * dpr, e.clientY * dpr) : -1;
+      if (ci >= 0) {
+        clearTimeout(pendingFileZoom);
+        if (h.switch_board) h.switch_board(ci); // recenter flag → flyToActive
+        return;
+      }
       const i = h && h.pick_at ? h.pick_at(e.clientX * dpr, e.clientY * dpr) : -1;
       if (i >= 0 && e.detail < 2) {
         // DELAYED like the file zoom: the first click of a floor DOUBLE-click

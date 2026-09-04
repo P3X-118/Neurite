@@ -609,6 +609,23 @@
         border-color: rgba(255, 214, 126, 0.55);
         border-style: dashed;
       }
+      /* CLUSTER chips name the organizations at constellation zoom — the scale
+         where per-pedestal labels belong to one cluster and the rest are unnamed
+         islands. Bigger and quieter than a pedestal chip: a title, not a marker.
+         Scale is NOT applied per-frame (these are read at a distance), only
+         opacity, so they stay legible as you pull back. */
+      #labels .label.cluster {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #d8fff0;
+        padding: 3px 10px;
+        background: rgba(4, 20, 16, 0.62);
+        border-color: rgba(95, 246, 156, 0.55);
+        border-radius: 3px;
+        box-shadow: 0 0 14px rgba(23, 176, 140, 0.18);
+      }
 
       #hint {
         position: fixed;

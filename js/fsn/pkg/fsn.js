@@ -128,6 +128,16 @@ export class FsnEmbed {
         }
     }
     /**
+     * Diagnostics for probes: `[grid scale k, scene half-extent about the origin]`.
+     * @returns {Float32Array}
+     */
+    debug_grid() {
+        const ret = wasm.fsnembed_debug_grid(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
      * Descend into floor `i` of the current tower — floor 0 is the current directory
      * (no-op; use `ascend`), floor i>=1 is its (i-1)th subfolder. Re-roots the scene
      * onto that subfolder. Returns the new root path, or "" if it can't be entered
@@ -2513,7 +2523,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000006: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MouseEvent")], shim_idx: 144, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MouseEvent")], shim_idx: 176, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h0678df9f04c95bd4);
             return ret;
         },
